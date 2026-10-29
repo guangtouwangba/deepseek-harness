@@ -41,7 +41,7 @@ Host configuration `credentialOnboarding` defaults to `true`. The Electron prelo
 
 ### ChatGPT subscription
 
-Choose **Add model provider → Third-party model provider → openai-codex**, then **Sign in with ChatGPT**. Follow the browser link and answer any verification prompt. Successful authorization enables an unconfigured `openai-codex` route without an API-key reference and preserves existing provider settings. Choose a model from the card to save the default for new sessions; existing sessions retain their selection. **Sign out** forgets the local credential without revoking the subscription. Reloading during login cancels the attempt; start sign-in again. Real account authorization and inference require an eligible ChatGPT account and manual verification; automated tests use synthetic grants.
+Choose **Add model provider → Third-party model provider → openai**, then **Sign in with ChatGPT** for direct subscription authorization. The separate `openai-codex` card offers **Sign in with Codex (legacy)** and keeps its own credential. Follow the browser link and answer any verification prompt. Successful authorization enables an unconfigured route without an API-key reference and preserves existing provider settings. Choose a model from the card to save the default for new sessions; existing sessions retain their selection. **Sign out** forgets only that route's local credential. Reloading during login cancels the attempt; start sign-in again. Real account authorization and inference require an eligible ChatGPT account and manual verification; automated tests use synthetic grants.
 
 ### API keys
 

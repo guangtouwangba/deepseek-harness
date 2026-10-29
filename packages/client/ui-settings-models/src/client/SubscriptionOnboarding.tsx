@@ -26,9 +26,9 @@ export function SubscriptionOnboarding(props: PropsRuntime<'settings.onboarding'
   const models = useModels(snapshot => snapshot)
   const state = useAuthorization(snapshot => snapshot)
   const readiness = onboardingReadiness(models)
-  const provider = models.rows.find(row => row.entry.provider === 'openai-codex' && row.entry.settingsNs === 'llm-pi-ai')
-  const active = state.activeKey === 'llm-pi-ai/openai-codex'
-  const signedIn = state.entries.some(entry => entry.key === 'llm-pi-ai/openai-codex' && entry.signedIn)
+  const provider = models.rows.find(row => row.entry.provider === 'openai' && row.entry.settingsNs === 'llm-pi-ai')
+  const active = state.activeKey === 'llm-pi-ai/openai'
+  const signedIn = state.entries.some(entry => entry.key === 'llm-pi-ai/openai' && entry.signedIn)
   const needsModel = signedIn && !state.models.some(model =>
     model.provider === state.defaultModel?.provider && model.id === state.defaultModel.model)
   const skip = !automatic || (models.status === 'ready' && provider === undefined)
@@ -36,7 +36,7 @@ export function SubscriptionOnboarding(props: PropsRuntime<'settings.onboarding'
   useEffect(() => { if (automatic && models.status === 'idle') loadModels() }, [automatic, models.status, loadModels])
   useEffect(() => { if (skip) complete() }, [skip, complete])
   if (skip || readiness.kind === 'loading' || provider === undefined) return null
-  const ready = signedIn && state.defaultModel?.provider === 'openai-codex'
+  const ready = signedIn && state.defaultModel?.provider === 'openai'
   return <OnboardingModal title={t('title')}>
     <p>{t('description')}</p>
     <ProviderSignIn {...props} provider={provider.entry} configured={provider.configured} keyConfigured={false} />

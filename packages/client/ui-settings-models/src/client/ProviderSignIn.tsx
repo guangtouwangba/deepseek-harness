@@ -69,7 +69,8 @@ export function ProviderSignIn({ provider, useAuthorization, start, cancel, answ
       </label>
       {selected ? <span role="status">{t('defaultSaved')}</span> : null}
     </> : methods.map(method => <button className={formStyles.primaryButton} type="button" key={method.id} disabled={state.busy || entry?.inFlight}
-      onClick={() => { start(provider, method.id) }}>{provider.provider === 'openai-codex' ? t('signIn') : method.label}</button>)}
+      onClick={() => { start(provider, method.id) }}>{provider.provider === 'openai' ? t('signIn')
+        : provider.provider === 'openai-codex' ? t('codexSignIn') : method.label}</button>)}
     {active && state.busy ? <>
       <span role="status">{frame?.notice?.message ?? t('working')}</span>
       {browserUrl ? <a href={browserUrl} target="_blank" rel="noopener noreferrer">{t('openBrowser')}</a> : null}

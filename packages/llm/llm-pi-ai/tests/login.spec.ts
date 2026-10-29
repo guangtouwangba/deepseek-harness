@@ -7,7 +7,7 @@ import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import type { AuthorizationInteraction, AuthorizationNotice, AuthorizationPrompt } from '@deepseek-ai/dsh-authorization'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials'
-import type { AuthEvent, AuthInteraction, AuthPrompt, AuthType, Credential } from '@earendil-works/pi-ai'
+import type { AuthEvent, AuthInteraction, AuthPrompt, AuthType, Credential, LoginOptions } from '@earendil-works/pi-ai'
 
 const login = vi.hoisted(() => vi.fn())
 
@@ -97,11 +97,34 @@ describe('pi-ai login flows', () => {
     // through its own prompt rather than leaving it to the settings form.
     expect(offered.find(entry => entry.key === recordKeyFor('deepseek'))?.methods.map(one => one.id))
       .toEqual(['api-key'])
-    // pi-ai ships Sign in with ChatGPT for `openai`, which needs an
-    // installation ID the harness does not supply; only the key login is offered.
     expect(catalogProvider('openai')?.auth.oauth?.loginLabel).toBe('Sign in with ChatGPT')
     expect(offered.find(entry => entry.key === recordKeyFor('openai'))?.methods.map(one => one.id))
-      .toEqual(['api-key'])
+      .toEqual(['oauth', 'api-key'])
+  })
+
+  it('uses a persistent installation ID for direct ChatGPT sign-in, independently of the Codex grant', async () => {
+    const ctx = await harness()
+    await credentialStoreFrom(ctx).modify('openai-codex', () => Promise.resolve({
+      type: 'oauth', access: 'codex-access', refresh: 'codex-refresh', expires: 1,
+    }))
+    const ids: string[] = []
+    login.mockImplementation(async (provider: string, type: AuthType, _interaction: AuthInteraction, options: LoginOptions) => {
+      expect(provider).toBe('openai')
+      expect(type).toBe('oauth')
+      const id = options.getDeviceId?.()
+      expect(id).toMatch(/^[0-9a-f-]{36}$/)
+      ids.push(id!)
+      await credentialStoreFrom(ctx).modify(provider, () => Promise.resolve({
+        type: 'oauth', access: 'chatgpt-access', refresh: 'chatgpt-refresh', expires: 1,
+      }))
+    })
+    for (let n = 0; n < 2; n++) {
+      await ctx.authorization.begin({ key: recordKeyFor('openai'), method: 'oauth', interaction: surface() })
+      await ctx.credentials.deleteRecord(recordKeyFor('openai'))
+    }
+    expect(ids[0]).toBe(ids[1])
+    expect(await credentialStoreFrom(ctx).read('openai-codex')).toMatchObject({ access: 'codex-access' })
+    expect((await credentialStoreFrom(ctx).list()).map(entry => entry.providerId)).toEqual(['openai-codex'])
   })
 
   it('runs the pi-ai auth type the chosen method names', async () => {

@@ -61,4 +61,4 @@
     - group: 自定义设置
     - button "取消"
     - button "保存"
-    - button "使用 ChatGPT 登录"
+    - button "使用 Codex 登录（旧版）"

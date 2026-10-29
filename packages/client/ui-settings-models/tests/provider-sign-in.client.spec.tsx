@@ -10,12 +10,12 @@ import { authorizationEn } from '../src/client/authorization-copy.ts'
 afterEach(cleanup)
 
 function initial(): ProviderSignInState {
-  return { entries: [{ key: 'llm-pi-ai/openai-codex', label: 'ChatGPT', methods: [{ id: 'oauth', label: 'Sign in with ChatGPT' }], inFlight: false, signedIn: false }], models: [], busy: false, loaded: true }
+  return { entries: [{ key: 'llm-pi-ai/openai', label: 'ChatGPT', methods: [{ id: 'oauth', label: 'Sign in with ChatGPT' }], inFlight: false, signedIn: false }], models: [], busy: false, loaded: true }
 }
 
 function props(): ProviderSignInProps {
   return {
-    provider: { provider: 'openai-codex', displayName: 'ChatGPT', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai-codex'], active: false },
+    provider: { provider: 'openai', displayName: 'ChatGPT', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: false },
     configured: false, keyConfigured: false,
     useAuthorization: bindSnapshotSelector(createSnapshotStore(initial())),
     start: vi.fn(), cancel: vi.fn(), answer: vi.fn(), signOut: vi.fn(), selectModel: vi.fn(), retry: vi.fn(),
@@ -33,7 +33,7 @@ it('offers subscription login without requesting an API key', () => {
 
 it('shows the verification link, code and manual callback prompt', () => {
   const input = props()
-  const state = { ...initial(), busy: true, activeKey: 'llm-pi-ai/openai-codex', frame: {
+  const state = { ...initial(), busy: true, activeKey: 'llm-pi-ai/openai', frame: {
     status: 'running' as const, notice: { message: 'Verify', url: 'https://auth.openai.com/authorize', code: '1234' },
     prompt: { id: 'prompt-1', kind: 'text' as const, message: 'Paste callback' },
   } }
@@ -45,4 +45,15 @@ it('shows the verification link, code and manual callback prompt', () => {
   expect(input.answer).toHaveBeenCalledWith('prompt-1', 'callback')
   fireEvent.click(screen.getByRole('button', { name: authorizationEn.cancel }))
   expect(input.cancel).toHaveBeenCalled()
+})
+
+it('labels legacy Codex separately instead of presenting it as direct ChatGPT sign-in', () => {
+  const input = props()
+  const state = initial()
+  state.entries[0]!.key = 'llm-pi-ai/openai-codex'
+  render(<ProviderSignIn {...input} provider={{ ...input.provider, provider: 'openai-codex' }}
+    useAuthorization={bindSnapshotSelector(createSnapshotStore(state))} />)
+  fireEvent.click(screen.getByRole('button', { name: authorizationEn.codexSignIn }))
+  expect(input.start).toHaveBeenCalledWith(expect.objectContaining({ provider: 'openai-codex' }), 'oauth')
+  expect(screen.queryByRole('button', { name: authorizationEn.signIn })).toBeNull()
 })

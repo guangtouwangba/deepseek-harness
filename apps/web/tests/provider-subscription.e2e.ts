@@ -71,11 +71,11 @@ it('resumes default-model selection after reloading with a stored ChatGPT grant'
   const scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
   const browser = await chromium.launch()
   try {
-    const key = credentialKey('llm-pi-ai', 'openai-codex')
+    const key = credentialKey('llm-pi-ai', 'openai')
     await scaffold.ctx.credentials.modifyRecord(key, () => Promise.resolve({ kind: 'grant', payload: {
       type: 'oauth', access: 'fixture-access', refresh: 'fixture-refresh', expires: 4102444800000,
     } }))
-    await scaffold.ctx.settings.update('llm-pi-ai', { providers: { 'openai-codex': {} } })
+    await scaffold.ctx.settings.update('llm-pi-ai', { providers: { openai: {} } })
     const page = await browser.newPage({ locale: ZH_BROWSER_LOCALE })
     await page.goto(scaffold.authenticatedUrl)
     const subscription = page.getByRole('dialog', { name: 'ChatGPT 订阅', exact: true })
@@ -88,7 +88,7 @@ it('resumes default-model selection after reloading with a stored ChatGPT grant'
     await subscription.getByRole('status').filter({ hasText: '已保存默认模型' }).waitFor()
     await subscription.getByRole('button', { name: '开始对话', exact: true }).click()
     await subscription.waitFor({ state: 'detached', timeout: 15_000 })
-    expect(scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ provider: 'openai-codex', model })
+    expect(scaffold.ctx.agentDefaultModel.currentSelection()).toMatchObject({ provider: 'openai', model })
   } finally {
     await browser.close()
     await scaffold.close()
