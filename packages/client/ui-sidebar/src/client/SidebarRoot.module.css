@@ -252,6 +252,7 @@
    emphasis only). A button only in behavior (New Session shortcut): the
    pointer cursor is the sole affordance — no hover chrome on the mark. */
 .brand {
+  visibility: hidden;
   flex: 1;
   min-width: 0;
   display: inline-flex;
@@ -366,11 +367,9 @@
   border-radius: var(--dsw-radius-md);
 }
 
-/* Rail logo swap: collapsed, the toggle rests as the whale mark (brand ink,
-   no hover circle) and hovering reveals the panel icon — the expand
-   affordance (figma sidebar-hover flow). Expanded it is a plain panel icon. */
+/* The collapsed rail keeps its navigation control visible without brand artwork. */
 .collapsed .toggle .panelIcon {
-  display: none;
+  display: inline;
 }
 
 @media (hover: hover) {
@@ -384,7 +383,7 @@
 }
 
 .railMark {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
 }
