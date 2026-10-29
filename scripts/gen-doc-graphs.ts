@@ -382,6 +382,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Projects the user-settings seam onto the generated Remote namespace: the read is always redacted and every refusal is classified here, not on the seam Definition.',
   },
   {
+    key: 'providerAuthorizationController',
+    pkg: 'api-settings-controller',
+    title: 'Host provider authorization Remote controller',
+    mode: 'core',
+    note: 'Relays registered login conversations to the browser and cancels pending prompts when the stream disconnects; stored grants remain on the Host.',
+  },
+  {
     key: 'workspaceFiles',
     pkg: 'api-workspace-files',
     title: 'Host workspace file Remote service',

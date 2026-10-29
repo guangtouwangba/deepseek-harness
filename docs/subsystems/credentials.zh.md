@@ -62,6 +62,10 @@ AccountDetails.balance 将充值钱包投影为 value、赠送钱包投影为 bo
 
 赠金通知查询返回 AccountBonusBatch，包含当前 Platform 账号 id 和按服务端顺序排列的可通知订单。AccountBonusNotification 保留服务端消息与到期时间，不投影凭证。确认请求携带预期账号 id 和订单 id；账号变化后 Host 拒绝该请求。两项通知操作都通过 x-client-locale 传递发起界面的语言，不使用语言查询参数。
 
+## 浏览器提供方授权
+
+`ProviderAuthorizationEntry` 描述一个已注册流程：凭据键、显示名称、支持的方式、进行中状态与已存凭据的存在状态。`ProviderAuthorizationFrame` 是登录流快照，状态为 `running`、`authorized`、`cancelled` 或 `failed`，并可携带通知与问题。问题包含一次性标识、输入类型、消息，以及可选的占位提示或选项，不包含已存授权。[设置控制器](../../packages/api/settings-controller/README.zh.md)负责远程交互与取消生命周期。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -367,6 +371,44 @@ abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserI
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
+<a id="ctxproviderauthorizationcontroller--providerauthorizationcontroller"></a>
+
+### `ctx.providerAuthorizationController` — `ProviderAuthorizationController`
+
+A remote login owns its prompts until answered, withdrawn, or disconnected.
+
+```ts cordis-catalog
+/**
+ * Describe provider sign-in availability without disclosing credentials.
+ * @returns registered login methods and credential presence, never credential contents.
+ */
+@Remote async list(): Promise<ProviderAuthorizationEntry[]>
+
+/**
+ * Run one login, streaming the current notice and prompt. Disconnect cancels the flow.
+ * @param key - registered credential record address.
+ * @param method - method offered by the registered flow.
+ * @param signal - requesting stream lifetime.
+ * @returns display-safe interaction snapshots, followed by one terminal status.
+ */
+@Remote({ mode: 'stream' }) async *login(key: string, method: string, signal: AbortSignal): AsyncIterable<ProviderAuthorizationFrame>
+
+/**
+ * Answer a pending prompt once; stale replies are refused.
+ * @param id - prompt identity from the active login stream.
+ * @param value - user input, never echoed or logged.
+ */
+@Remote answer(id: string, value: string): void
+
+/**
+ * Forget a registered provider's credential after its login has settled.
+ * @param key - registered credential record address.
+ */
+@Remote async signOut(key: string): Promise<void>
+```
+
+Source: [`packages/api/settings-controller/src/authorization.ts`](../../packages/api/settings-controller/src/authorization.ts)
+
 <a id="authorization-events"></a>
 
 ### `authorization/*` events
@@ -389,7 +431,7 @@ One authorization attempt has finished and released its key. Fires for every ter
 'authorization/settled'(key: CredentialKey, settlement: AuthorizationSettlement): void
 ```
 
-Source: [`packages/credentials/authorization/src/index.ts`](../../packages/credentials/authorization/src/index.ts)
+Source: [`packages/credentials/authorization/src/types.ts`](../../packages/credentials/authorization/src/types.ts)
 
 <a id="credentials-events"></a>
 

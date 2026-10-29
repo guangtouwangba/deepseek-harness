@@ -11,7 +11,7 @@ Desktop product events use the optional [product analytics service](../product-a
 
 ## Summary
 
-`dsh-client-ui-settings-models` is the Models settings page of the dsh web client: users configure API keys (stored write-only under the profile's credential reference), edit each provider's model list, and hand-declare custom pi-ai routes, with provider rows and one editor card at a time. The page joins the provider directory, the settings document, and the credential descriptions into one shared snapshot, so a row's state stays consistent across all three. It also walks first-run users through two ordered dialogs — a versioned preview notice and the conditional official-DeepSeek credential step.
+`dsh-client-ui-settings-models` lets users sign in to subscription providers, configure API keys, edit model lists, and add custom pi-ai routes. The page joins provider configuration and credential metadata without reading stored secrets. Browser onboarding offers ChatGPT subscription login before the DeepSeek credential step. Users explicitly choose a default model after signing in.
 
 ## Table of Contents
 
@@ -38,6 +38,10 @@ A provider with a stored catalog error remains visible with its diagnostic and e
 After Apply closes an editor, its saved status appears when the current provider, settings, and credential snapshot is ready. Opening any row's editor, adding a provider, and opening a removal confirmation wait for that refresh. A newly opened Models section, or one retrying after a page-load failure, waits for a ready snapshot before mounting editors. A background refresh preserves an open draft while its editor remains mounted; a failed page load or provider removal can close it.
 
 Host configuration `credentialOnboarding` defaults to `true`. The Electron preload marker suppresses automatic credential onboarding and the Web welcome notice; Models settings and explicit API-key editing remain available. The [account plugin](../ui-settings-account/README.md#desktop-onboarding) owns the Desktop introduction. Other native shells can disable only the credential step with `credentialOnboarding: false`. Host publishes this public boolean through `webserver/index-inject`, and Client validates it before registering dialogs. It is page initialization data, not a durable completion marker.
+
+### ChatGPT subscription
+
+Choose **Add model provider → Third-party model provider → openai-codex**, then **Sign in with ChatGPT**. Follow the browser link and answer any verification prompt. Successful authorization enables an unconfigured `openai-codex` route without an API-key reference and preserves existing provider settings. Choose a model from the card to save the default for new sessions; existing sessions retain their selection. **Sign out** forgets the local credential without revoking the subscription. Reloading during login cancels the attempt; start sign-in again. Real account authorization and inference require an eligible ChatGPT account and manual verification; automated tests use synthetic grants.
 
 ### API keys
 
@@ -71,7 +75,7 @@ Empty pi-ai capacity fields display `1M` for the context window and `128K` for m
 
 ### First-run dialogs
 
-After the versioned notice step completes, the DeepSeek step projects first-run readiness from the same joined snapshot. ANY provider the user can already reach ends it without rendering; only a user with none is asked for the official DeepSeek key. Configure later completes only this coordinator pass, and an absent adapter, inactive route, failed join, read-only deployment, or unusable capability completes the step without rendering — Models remains the diagnostic surface.
+After the versioned notice, a browser with no usable provider offers ChatGPT subscription sign-in and an explicit default-model choice. **Use another provider** proceeds to the DeepSeek step. Both steps read the shared Models snapshot and skip when a usable provider already exists. Configure later completes only this coordinator pass; Models remains the diagnostic surface for unavailable configuration.
 
 ### Extension slots
 

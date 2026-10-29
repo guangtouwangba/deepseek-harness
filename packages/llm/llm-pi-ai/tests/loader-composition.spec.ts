@@ -15,6 +15,7 @@ import { profileComposition } from '../../../settings/settings/tests/profile-com
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+import { ProviderAuthorizationController } from '../../../api/settings-controller/src/authorization.ts'
 
 /** One text block, then a tool call truncated by the output-token ceiling. */
 const truncatedToolCallEvents = [
@@ -53,6 +54,8 @@ async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }
     '    debounceMs: 10',
     '- id: authorization',
     "  name: '@deepseek-ai/dsh-authorization'",
+    '- id: provider-authorization',
+    "  name: 'test-provider-authorization'",
     '- id: llm-pi-ai',
     "  name: '@deepseek-ai/dsh-llm-pi-ai'",
     '',
@@ -67,6 +70,7 @@ async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }
     ['test-llm-service', LlmRuntime],
     ['@deepseek-ai/dsh-credentials-local', LocalCredentialProvider],
     ['@deepseek-ai/dsh-authorization', AuthorizationService],
+    ['test-provider-authorization', ProviderAuthorizationController],
     ['@deepseek-ai/dsh-llm-pi-ai', LlmPiAi],
   ])
   const internal: ModuleLoaderV2 = {
@@ -130,6 +134,11 @@ describe('llm-pi-ai real dormant composition', () => {
     // not supply, so the route offers only its key login.
     expect(methods('openai')).toEqual(['api-key'])
     expect(methods('anthropic')).toEqual(['oauth', 'api-key'])
+    expect(methods('openai-codex')).toEqual(['oauth'])
+    const entries = await ctx.providerAuthorizationController.list()
+    expect(entries.find(entry => entry.key === 'llm-pi-ai/openai-codex')).toMatchObject({
+      signedIn: false, methods: [{ id: 'oauth', label: expect.stringContaining('ChatGPT') as string }],
+    })
   })
 
   it('uses settings-only route headers for model discovery', async () => {

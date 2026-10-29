@@ -74,6 +74,11 @@ describe.skipIf(MODE === 'record')('web e2e: first-run DeepSeek credential setup
     await welcome.getByRole('button', { name: WELCOME_NOTICE_COPY.zh.continueLabel }).click()
     await welcome.waitFor({ state: 'detached', timeout: 15_000 })
 
+    const subscription = page.getByRole('dialog', { name: 'ChatGPT 订阅', exact: true })
+    await subscription.waitFor({ timeout: 15_000 })
+    await subscription.getByRole('button', { name: '使用 ChatGPT 登录', exact: true }).waitFor()
+    await subscription.getByRole('button', { name: '使用其他模型服务', exact: true }).click()
+
     const signIn = page.getByRole('dialog', { name: '开始使用', exact: true })
     await signIn.waitFor({ timeout: 15_000 })
     await compareOrRefreshGolden(SIGN_IN_EXPECTED,

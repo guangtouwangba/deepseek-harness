@@ -62,6 +62,10 @@ AccountDetails.balance projects recharge wallets in value and promotional wallet
 
 Bonus notification queries return an AccountBonusBatch with the current Platform account id and eligible orders in server order. AccountBonusNotification retains the server message and expiry without projecting credentials. Acknowledgment carries the expected account id and order id; the Host refuses it after an account change. Both notification operations use the initiating UI language through x-client-locale, without a language query parameter.
 
+## Browser provider authorization
+
+`ProviderAuthorizationEntry` describes one registered flow: its credential key, display label, supported methods, in-flight status, and stored-credential presence. `ProviderAuthorizationFrame` is a login-stream snapshot with `running`, `authorized`, `cancelled`, or `failed` status, an optional notice, and an optional prompt. Prompts carry a one-use identity, input kind, message, and optional placeholder or choices. Stored grants are excluded. The [settings controller](../../packages/api/settings-controller/README.md) owns the remote interaction and cancellation lifecycle.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -367,6 +371,44 @@ abstract getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserI
 
 Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
+<a id="ctxproviderauthorizationcontroller--providerauthorizationcontroller"></a>
+
+### `ctx.providerAuthorizationController` — `ProviderAuthorizationController`
+
+A remote login owns its prompts until answered, withdrawn, or disconnected.
+
+```ts cordis-catalog
+/**
+ * Describe provider sign-in availability without disclosing credentials.
+ * @returns registered login methods and credential presence, never credential contents.
+ */
+@Remote async list(): Promise<ProviderAuthorizationEntry[]>
+
+/**
+ * Run one login, streaming the current notice and prompt. Disconnect cancels the flow.
+ * @param key - registered credential record address.
+ * @param method - method offered by the registered flow.
+ * @param signal - requesting stream lifetime.
+ * @returns display-safe interaction snapshots, followed by one terminal status.
+ */
+@Remote({ mode: 'stream' }) async *login(key: string, method: string, signal: AbortSignal): AsyncIterable<ProviderAuthorizationFrame>
+
+/**
+ * Answer a pending prompt once; stale replies are refused.
+ * @param id - prompt identity from the active login stream.
+ * @param value - user input, never echoed or logged.
+ */
+@Remote answer(id: string, value: string): void
+
+/**
+ * Forget a registered provider's credential after its login has settled.
+ * @param key - registered credential record address.
+ */
+@Remote async signOut(key: string): Promise<void>
+```
+
+Source: [`packages/api/settings-controller/src/authorization.ts`](../../packages/api/settings-controller/src/authorization.ts)
+
 <a id="authorization-events"></a>
 
 ### `authorization/*` events
@@ -389,7 +431,7 @@ One authorization attempt has finished and released its key. Fires for every ter
 'authorization/settled'(key: CredentialKey, settlement: AuthorizationSettlement): void
 ```
 
-Source: [`packages/credentials/authorization/src/index.ts`](../../packages/credentials/authorization/src/index.ts)
+Source: [`packages/credentials/authorization/src/types.ts`](../../packages/credentials/authorization/src/types.ts)
 
 <a id="credentials-events"></a>
 

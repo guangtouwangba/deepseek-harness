@@ -1,0 +1,29 @@
+.card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+}
+
+.card form,
+.card label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.card input,
+.card select {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.card a,
+.card code {
+  overflow-wrap: anywhere;
+}

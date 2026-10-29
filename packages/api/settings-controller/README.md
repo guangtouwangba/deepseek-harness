@@ -31,6 +31,8 @@ Mount this package as a Loader entry in a profile that serves browser configurat
 
 `settings.openSettingsDocument()` prepares the provider-owned document and opens it with the native text editor; it accepts no browser-supplied filesystem target.
 
+With authorization and credential services mounted, `providerAuthorization` exposes registered login methods and stored-credential presence. Its login stream carries browser links, verification codes, and text, secret, or selection prompts; answers are submitted separately by prompt identity. Cancelling or disconnecting the stream withdraws the login and its pending prompts. Sign-out removes the registered provider's local credential after any login has settled. Stored tokens and provider exception details never cross this interface.
+
 -----
 
 <a id="configuration"></a>

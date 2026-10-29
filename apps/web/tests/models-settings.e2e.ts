@@ -125,6 +125,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(options).toContain('anthropic')
     expect(options).toContain('minimax-cn')
     await pick.selectOption('openai-codex')
+    await dialog.getByRole('button', { name: '使用 ChatGPT 登录', exact: true }).waitFor({ timeout: 10_000 })
     await expect.poll(async () => dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).count(), { timeout: 10_000 }).toBe(0)
     expect(await dialog.getByRole('button', { name: '认证说明', exact: true }).count()).toBe(0)
     expect(await dialog.textContent()).not.toMatch(/oauth/i)

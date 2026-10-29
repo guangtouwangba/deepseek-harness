@@ -2408,6 +2408,35 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'providerAuthorizationController',
+    summary: 'A remote login owns its prompts until answered, withdrawn, or disconnected.',
+    description: 'A remote login owns its prompts until answered, withdrawn, or disconnected.',
+    methods: [
+      {
+        signature: '@Remote async list(): Promise<ProviderAuthorizationEntry[]>',
+        description: 'Describe provider sign-in availability without disclosing credentials.',
+        parameters: [],
+        returns: 'registered login methods and credential presence, never credential contents.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *login(key: string, method: string, signal: AbortSignal): AsyncIterable<ProviderAuthorizationFrame>',
+        description: 'Run one login, streaming the current notice and prompt. Disconnect cancels the flow.',
+        parameters: [{ name: 'key', description: 'registered credential record address.' }, { name: 'method', description: 'method offered by the registered flow.' }, { name: 'signal', description: 'requesting stream lifetime.' }],
+        returns: 'display-safe interaction snapshots, followed by one terminal status.',
+      },
+      {
+        signature: '@Remote answer(id: string, value: string): void',
+        description: 'Answer a pending prompt once; stale replies are refused.',
+        parameters: [{ name: 'id', description: 'prompt identity from the active login stream.' }, { name: 'value', description: 'user input, never echoed or logged.' }],
+      },
+      {
+        signature: '@Remote async signOut(key: string): Promise<void>',
+        description: 'Forget a registered provider\'s credential after its login has settled.',
+        parameters: [{ name: 'key', description: 'registered credential record address.' }],
+      },
+    ],
+  },
+  {
     key: 'ptcRuntime',
     summary: 'Registers one `ctx.ptcRuntime` implementation.',
     description: 'Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.',
@@ -7566,6 +7595,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PromptSubmitResult',
     declaration: 'export type PromptSubmitResult = {\n    text: string;\n    context?: readonly string[];\n    drop?: undefined;\n} | {\n    drop: string;\n    text?: undefined;\n    context?: undefined;\n};',
+  },
+  {
+    name: 'ProviderAuthorizationEntry',
+    declaration: 'export interface ProviderAuthorizationEntry {\n    key: string;\n    label: string;\n    methods: {\n        id: string;\n        label: string;\n    }[];\n    inFlight: boolean;\n    signedIn: boolean;\n}',
+  },
+  {
+    name: 'ProviderAuthorizationFrame',
+    declaration: 'export interface ProviderAuthorizationFrame {\n    status: \'running\' | \'authorized\' | \'cancelled\' | \'failed\';\n    notice?: {\n        message: string;\n        url?: string;\n        code?: string;\n    };\n    prompt?: {\n        id: string;\n        kind: \'text\' | \'secret\' | \'select\';\n        message: string;\n        placeholder?: string;\n        options?: {\n            id: string;\n            label: string;\n        }[];\n    };\n}',
   },
   {
     name: 'ProviderRequestId',

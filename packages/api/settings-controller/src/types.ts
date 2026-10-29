@@ -32,3 +32,24 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 export interface SettingsDocumentOpenValue {
   readonly opened: true
 }
+/** Registered provider login methods and display-safe credential presence. */
+export interface ProviderAuthorizationEntry {
+  key: string
+  label: string
+  methods: { id: string; label: string }[]
+  inFlight: boolean
+  signedIn: boolean
+}
+
+/** Current browser interaction for one login; never contains a stored grant. */
+export interface ProviderAuthorizationFrame {
+  status: 'running' | 'authorized' | 'cancelled' | 'failed'
+  notice?: { message: string; url?: string; code?: string }
+  prompt?: {
+    id: string
+    kind: 'text' | 'secret' | 'select'
+    message: string
+    placeholder?: string
+    options?: { id: string; label: string }[]
+  }
+}
