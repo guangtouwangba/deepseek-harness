@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenAI 订阅额度",
+    "description": "在侧栏查看 Codex 每周剩余额度和重置时间，复用 Harness 或本机 Codex CLI 登录"
+  }
+}

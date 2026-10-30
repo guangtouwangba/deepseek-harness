@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenAI subscription quota",
+    "description": "View Codex weekly remaining quota and reset times in the sidebar. Reuses a saved Harness or local Codex CLI login."
+  }
+}

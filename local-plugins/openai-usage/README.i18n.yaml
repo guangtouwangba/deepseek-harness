@@ -1,0 +1,34 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write local-plugins/openai-usage/README.md
+/:
+  en: 1b030097e822d030
+  zh: 07b3ac05d25aa685
+/openai-subscription-quota:
+  en: 67a43004c099f8db
+  zh: 016b98a33d4405de
+/openai-subscription-quota/summary:
+  en: 2f6f6e7463e52dfd
+  zh: 0c75930f3be5c4a0
+/openai-subscription-quota/table-of-contents:
+  en: 218bf2f6dbe2fcef
+  zh: 77ac997b0b4260a9
+/openai-subscription-quota/use-this-package:
+  en: 9ae7f208ad7a2bbc
+  zh: 6267c26cbed6a499
+/openai-subscription-quota/configuration:
+  en: 2649f0509df0e222
+  zh: 24de60cb8bfb7f85
+/openai-subscription-quota/understand-the-implementation:
+  en: 30d7ba1231bc8e1e
+  zh: ac2062b0644af4f2
+/openai-subscription-quota/model-experience:
+  en: e985235b4db6420b
+  zh: 52828efba3017359
+/openai-subscription-quota/known-limitations-and-deferred-work:
+  en: 7e4d7bfb14bdc6e1
+  zh: 093385f622aacdad
+/openai-subscription-quota/dev-note:
+  en: 9900db9677c5236d
+  zh: 34ea5e639f38432a

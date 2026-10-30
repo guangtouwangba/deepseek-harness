@@ -1,0 +1,8 @@
+- insert:
+    - id: local-openai-usage
+      name: '@local/dsh-openai-usage'
+      config:
+        provider: auto
+        timeoutMs: 15000
+        refreshIntervalMs: 60000
+        maxResponseBytes: 65536

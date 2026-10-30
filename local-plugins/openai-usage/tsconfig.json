@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.client.json",
+  "compilerOptions": { "noEmit": true, "composite": false, "paths": {}, "rewriteRelativeImportExtensions": false, "allowImportingTsExtensions": true, "types": ["client-build-environment", "client-assets", "node"] },
+  "include": ["src/client/**/*.ts", "src/client/**/*.tsx", "tests/client.spec.tsx"]
+}
