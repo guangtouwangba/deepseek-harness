@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Public plugin search",
+    "description": "Find DSH plugin bundles on the public npm registry from chat, without installing them."
+  }
+}

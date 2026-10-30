@@ -1,0 +1,9 @@
+- insert:
+    - id: local-public-plugin-search
+      name: '@local/dsh-public-plugin-search'
+      config:
+        registry: https://registry.npmjs.org/
+        timeoutMs: 20000
+        pageSize: 10
+        maxResponseBytes: 2097152
+        maxOutputBytes: 32768

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "公开插件搜索",
+    "description": "在对话中搜索公共 npm registry 上的 DSH 插件包，只读查询，不自动安装。"
+  }
+}
