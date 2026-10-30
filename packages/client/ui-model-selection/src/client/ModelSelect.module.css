@@ -1,6 +1,18 @@
 .root {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
+}
+
+.providerPicker {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.trigger.providerTrigger {
+  max-width: 140px;
 }
 
 /* Figma 313:14108 ToggleButton: 13/20 regular secondary label, 4px gap,

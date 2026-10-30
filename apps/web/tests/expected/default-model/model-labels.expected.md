@@ -1,19 +1,5 @@
 [
   {
-    "provider": "deepseek-official",
-    "model": "deepseek-v4-flash",
-    "name": "DeepSeek-V4-Flash",
-    "slot": "conversation.input.model.label",
-    "inline": true
-  },
-  {
-    "provider": "deepseek-official",
-    "model": "deepseek-v4-flash-vision-exp",
-    "name": "DeepSeek-V4-Flash-Vision-Exp",
-    "slot": "conversation.input.model.label",
-    "inline": true
-  },
-  {
     "provider": "origin-gateway",
     "model": "origin-large",
     "name": "Origin Large",
@@ -21,16 +7,30 @@
     "inline": true
   },
   {
-    "provider": "acme-gateway",
-    "model": "acme-large",
-    "name": "Acme Large",
+    "provider": "origin-gateway",
+    "model": "origin-2",
+    "name": "Origin Model 2",
     "slot": "conversation.input.model.label",
     "inline": true
   },
   {
-    "provider": "acme-gateway",
-    "model": "acme-small",
-    "name": "Acme Small",
+    "provider": "origin-gateway",
+    "model": "origin-3",
+    "name": "Origin Model 3",
+    "slot": "conversation.input.model.label",
+    "inline": true
+  },
+  {
+    "provider": "origin-gateway",
+    "model": "origin-4",
+    "name": "Origin Model 4",
+    "slot": "conversation.input.model.label",
+    "inline": true
+  },
+  {
+    "provider": "origin-gateway",
+    "model": "origin-5",
+    "name": "Origin Model 5",
     "slot": "conversation.input.model.label",
     "inline": true
   }

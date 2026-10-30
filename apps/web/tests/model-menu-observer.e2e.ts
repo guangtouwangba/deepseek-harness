@@ -146,6 +146,8 @@ describe.skipIf(webSnapshotMode() === 'record').each([
     onTestFailed(() => saveFailureShot(page, `web-e2e-model-menu-observer-${engine.name()}`))
     let buttonMaterial: Awaited<ReturnType<typeof headingMaterial>> | undefined
     for (const entry of ['button', 'command'] as const) {
+      const expectedGroups = entry === 'button' ? EXPECTED_GROUPS.filter(group => group.label === 'Origin Gateway') : EXPECTED_GROUPS
+      const rowCount = expectedGroups.reduce((count, group) => count + group.rows.length, 0)
       const composer = page.locator('[data-composer-input]').first()
       const surface = entry === 'button'
         ? page.getByRole('group', { name: '模型与推理等级', exact: true })
@@ -156,6 +158,7 @@ describe.skipIf(webSnapshotMode() === 'record').each([
       const search = entry === 'button'
         ? page.getByRole('searchbox', { name: '搜索模型…', exact: true })
         : page.getByRole('textbox', { name: '筛选选项', exact: true })
+      const pinned = (index: number, count = expectedGroups.length) => assertPinned(page, viewport, index, count)
       const open = async (): Promise<void> => {
         if (entry === 'button') {
           await page.getByRole('button', { name: /^选择模型/ }).click()
@@ -164,12 +167,12 @@ describe.skipIf(webSnapshotMode() === 'record').each([
           await page.getByRole('button', { name: '添加文件或调用指令', exact: true }).click()
           await page.getByRole('option', { name: /^模型/ }).click()
         }
-        await expect.poll(() => readGroups(viewport)).toEqual(EXPECTED_GROUPS)
+        await expect.poll(() => readGroups(viewport)).toEqual(expectedGroups)
         await expect.poll(() => search.evaluate(node => node === node.ownerDocument.activeElement)).toBe(true)
         await assertNoRectReads(page)
         await page.mouse.move(0, 0)
         await viewport.evaluate((node) => { node.style.maxHeight = '80px'; node.scrollTop = 0 })
-        await assertPinned(page, viewport, -1)
+        await pinned(-1)
       }
       const close = async (): Promise<void> => {
         if (crashed || page.isClosed() || await surface.count() === 0) return
@@ -181,13 +184,13 @@ describe.skipIf(webSnapshotMode() === 'record').each([
 
       await open()
       try {
-        expect(await viewport.locator('[role="option"], [role="menuitemradio"]').count()).toBe(30)
+        expect(await viewport.locator('[role="option"], [role="menuitemradio"]').count()).toBe(rowCount)
         expect(await viewport.evaluate(node => node.scrollTop)).toBe(0)
         expect(await viewport.locator('[data-menu-group-heading]').evaluateAll(headings =>
           [...new Set(headings.map(heading => getComputedStyle(heading).backgroundColor))]))
           .toEqual(['rgba(0, 0, 0, 0)'])
         await scrollToGroup(viewport, 0)
-        await assertPinned(page, viewport, 0)
+        await pinned(0)
         const material = await headingMaterial(viewport)
         expect(material.map(style => style.fill)).toEqual(['rgba(248, 249, 250, 0.94)', 'rgba(48, 49, 54, 0.94)'])
         for (const style of material) {
@@ -196,16 +199,16 @@ describe.skipIf(webSnapshotMode() === 'record').each([
         if (entry === 'button') buttonMaterial = material
         else expect(material).toEqual(buttonMaterial)
 
-        for (const index of [2, 4, 1]) {
+        for (const index of entry === 'button' ? [0] : [2, 4, 1]) {
           await scrollToGroup(viewport, index)
-          await assertPinned(page, viewport, index)
+          await pinned(index)
           const height = await viewport.evaluate(node => node.clientHeight)
           expect(height).toBeGreaterThan(0)
           expect(height).toBeLessThanOrEqual(80)
           expect(await viewport.locator('[data-menu-group]').nth(index).evaluate(node => node.clientHeight))
             .toBeGreaterThan(height * 2)
           await scrollToGroup(viewport, index, height + 1)
-          await assertPinned(page, viewport, index)
+          await pinned(index)
           expect(await viewport.evaluate((node, groupIndex) => {
             const headings = node.querySelectorAll('[data-menu-group-heading]')
             const firstStart = node.querySelector('[data-menu-group-start]')!
@@ -214,7 +217,7 @@ describe.skipIf(webSnapshotMode() === 'record').each([
           }, index)).toBeLessThan(1)
         }
         await scrollToGroup(viewport, 0, 0)
-        await assertPinned(page, viewport, -1)
+        await pinned(-1)
 
         for (const [key, steps] of [['ArrowDown', 18], ['ArrowUp', 10]] as const) {
           const visited = new Set<number>()
@@ -224,7 +227,7 @@ describe.skipIf(webSnapshotMode() === 'record').each([
             const before = await rows.evaluateAll(nodes => nodes.findIndex(node =>
               node.hasAttribute('data-highlighted') || node.getAttribute('aria-selected') === 'true'))
             await search.press(key)
-            const expected = (before + (key === 'ArrowDown' ? 1 : -1) + 30) % 30
+            const expected = (before + (key === 'ArrowDown' ? 1 : -1) + rowCount) % rowCount
             await expect.poll(() => rows.evaluateAll(nodes => nodes.findIndex(node =>
               node.hasAttribute('data-highlighted') || node.getAttribute('aria-selected') === 'true'))).toBe(expected)
             await frames(page)
@@ -252,34 +255,38 @@ describe.skipIf(webSnapshotMode() === 'record').each([
             expect(await search.evaluate(node => node === node.ownerDocument.activeElement)).toBe(true)
             await assertNoRectReads(page)
           }
-          expect(visited.size).toBeGreaterThan(1)
+          if (entry === 'button') expect(visited.size).toBe(1)
+          else expect(visited.size).toBeGreaterThan(1)
           expect(observedPinnedHighlight).toBe(true)
         }
 
         await scrollToGroup(viewport, 0)
-        await assertPinned(page, viewport, 0)
-        await search.fill('Quartz Model 1')
-        await expect.poll(() => readGroups(viewport)).toEqual([{ label: 'Quartz Gateway', rows: ['Quartz Model 1'] }])
+        await pinned(0)
+        const match = entry === 'button' ? { label: 'Origin Gateway', rows: ['Origin Model 2'] }
+          : { label: 'Quartz Gateway', rows: ['Quartz Model 1'] }
+        await search.fill(match.rows[0]!)
+        await expect.poll(() => readGroups(viewport)).toEqual([match])
         await assertPinned(page, viewport, -1, 1)
         expect(await viewport.evaluate(node => node.scrollTop)).toBe(0)
         await search.fill('')
-        await expect.poll(() => readGroups(viewport)).toEqual(EXPECTED_GROUPS)
-        await assertPinned(page, viewport, -1)
+        await expect.poll(() => readGroups(viewport)).toEqual(expectedGroups)
+        await pinned(-1)
         await close()
         await open()
         expect(await search.inputValue()).toBe('')
 
-        await scrollToGroup(viewport, 3, 90)
-        await assertPinned(page, viewport, 3)
+        const resizeGroup = entry === 'button' ? 0 : 3
+        await scrollToGroup(viewport, resizeGroup, 90)
+        await pinned(resizeGroup)
         await viewport.evaluate((node) => { node.style.maxHeight = '64px' })
         await expect.poll(() => viewport.evaluate(node => node.clientHeight)).toBeLessThanOrEqual(64)
-        await assertPinned(page, viewport, 3)
-        await scrollToGroup(viewport, 4, 100)
-        await assertPinned(page, viewport, 4)
-        await scrollToGroup(viewport, 1, 100)
-        await assertPinned(page, viewport, 1)
+        await pinned(resizeGroup)
+        for (const index of entry === 'button' ? [0] : [4, 1]) {
+          await scrollToGroup(viewport, index, 100)
+          await pinned(index)
+        }
         await scrollToGroup(viewport, 0, 0)
-        await assertPinned(page, viewport, -1)
+        await pinned(-1)
       } finally {
         await close()
       }

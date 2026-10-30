@@ -8,7 +8,11 @@
   - group "Origin Gateway":
     - text: Origin Gateway
     - option "Origin Large"
+    - option "Origin Model 2"
+    - option "Origin Model 3"
+    - option "Origin Model 4" [selected]
+    - option "Origin Model 5"
   - group "Acme Gateway":
     - text: Acme Gateway
-    - option "Acme Large" [selected]
+    - option "Acme Large"
     - option "Acme Small"

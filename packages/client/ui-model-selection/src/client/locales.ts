@@ -11,6 +11,8 @@
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'provider.account': 'DeepSeek 账号',
+  'provider.select': '选择厂商',
+  'provider.aria': '选择厂商，当前 {provider}',
   'command.label': '模型',
   'command.description': '选择本会话使用的模型',
   'option.loadError': '目录加载失败：{message}',
@@ -41,6 +43,8 @@ export type ModelKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'provider.account': 'DeepSeek Account',
+  'provider.select': 'Select provider',
+  'provider.aria': 'Select provider, current {provider}',
   'command.label': 'Model',
   'command.description': 'Select the model for this conversation',
   'option.loadError': 'Catalog failed to load: {message}',
@@ -68,6 +72,8 @@ export const en = {
 /** Japanese copy, checked against the English keys. */
 export const ja = {
   'provider.account': 'DeepSeek アカウント',
+  'provider.select': 'プロバイダーを選択',
+  'provider.aria': 'プロバイダーを選択、現在 {provider}',
   'command.label': 'モデル',
   'command.description': 'この会話で使用するモデルを選択',
   'option.loadError': 'カタログの読み込みに失敗しました: {message}',
@@ -95,6 +101,8 @@ export const ja = {
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
   'provider.account': 'Cuenta DeepSeek',
+  'provider.select': 'Seleccionar proveedor',
+  'provider.aria': 'Seleccionar proveedor, actual {provider}',
   'command.label': 'modelo',
   'command.description': 'Selecciona el modelo para esta conversación',
   'option.loadError': 'No se pudo cargar el catálogo: {message}',
@@ -122,6 +130,8 @@ export const es = {
 /** French dictionary, checked against the English keys. */
 export const fr = {
   'provider.account': 'Compte DeepSeek',
+  'provider.select': 'Choisir le fournisseur',
+  'provider.aria': 'Choisir le fournisseur, actuel {provider}',
   'command.label': 'Modèle',
   'command.description': 'Sélectionnez le modèle pour cette conversation',
   'option.loadError': 'Échec du chargement du catalogue : {message}',
@@ -149,6 +159,8 @@ export const fr = {
 /** German dictionary, checked against the English keys. */
 export const de = {
   'provider.account': 'DeepSeek-Konto',
+  'provider.select': 'Anbieter auswählen',
+  'provider.aria': 'Anbieter auswählen, aktuell {provider}',
   'command.label': 'Modell',
   'command.description': 'Wählen Sie das Modell für dieses Gespräch aus',
   'option.loadError': 'Katalog konnte nicht geladen werden: {message}',
@@ -176,6 +188,8 @@ export const de = {
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
   'provider.account': 'DeepSeek Аккаунт',
+  'provider.select': 'Выбрать провайдера',
+  'provider.aria': 'Выбрать провайдера, текущий {provider}',
   'command.label': 'Модель',
   'command.description': 'Выберите модель для этого разговора',
   'option.loadError': 'Не удалось загрузить каталог: {message}.',
@@ -203,6 +217,8 @@ export const ru = {
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
   'provider.account': 'DeepSeek Conta',
+  'provider.select': 'Selecionar fornecedor',
+  'provider.aria': 'Selecionar fornecedor, atual {provider}',
   'command.label': 'Modelo',
   'command.description': 'Selecione o modelo para esta conversa',
   'option.loadError': 'Falha ao carregar o catálogo: {message}',

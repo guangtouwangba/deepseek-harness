@@ -1,11 +1,13 @@
 /**
  * ModelSelect: the composer's named model seat (`conversation.input.model`).
- * Two-level selection per figma 496:26454's MenuDropdown: the root menu is
+ * Separate provider and model triggers share the session's committed selection.
+ * Switching provider selects its first available model with its default effort.
+ * The model trigger keeps two-level selection: the root menu is
  * the Model / Effort row pair (label + current value + a right chevron),
- * each drilling into its own list — the provider-grouped model list over
+ * each drilling into its own list — the selected provider's model list over
  * the shared directory, and the effort levels. The trigger (313:14108's
  * ToggleButton) shows both: model name + effort in the caption tone.
- * Model catalogs above four entries show search, which retains focus while
+ * Provider model catalogs above four entries show search, which retains focus while
  * ↑/↓ cycle the highlighted result; Enter and Tab accept it. Smaller model
  * catalogs, root panes, and effort panes move focus between rows. Escape and Shift+Tab leave a drilled pane first and otherwise close
  * back to the trigger. A drilled pane focuses the current effort or model
@@ -27,7 +29,7 @@
  * chevron, and each row whose value that selection carries shows one in place
  * of its check mark.
  */
-import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Menu, MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
   type CSSProperties, type KeyboardEvent, type FocusEvent,
@@ -37,7 +39,7 @@ import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseFillRegular,
-  IconDataOutlineRegular, IconWarningOutlineRegular, Input, isMobileDevice, rankByName, StateDot, Tag, Toast,
+  IconDataOutlineRegular, IconGlobeOutlineRegular, IconWarningOutlineRegular, Input, isMobileDevice, rankByName, StateDot, Tag, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelLabelOwner, ModelSelectInjected } from './slots.ts'
@@ -61,7 +63,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
  * Render the composer model seat.
  * @param props - owner share (locked) + injected face (shared directory
  * store/verbs) + the standard locale seat.
- * @returns the trigger and, while open, the two-level menu.
+ * @returns separate provider and model triggers with their anchored menus.
  */
 export function ModelSelect(
   { locked, available, directory, load, select, resolveText, t, renderSlot }:
@@ -73,6 +75,7 @@ export function ModelSelect(
     () => directory.getSnapshot(),
   )
   const [open, setOpen] = useState(false)
+  const [providerOpen, setProviderOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null)
@@ -113,10 +116,13 @@ export function ModelSelect(
           : { reasoningEffort: model.reasoning.defaultEffort },
       } satisfies ModelSelection,
     }))), [groups])
-  const showSearch = choices.length > 4
-  const filteredGroups = useMemo(() => groups.map(group => ({
+  const selectedProviderId = state.current?.provider ?? groups[0]?.id
+  const providerGroups = useMemo(() => groups.filter(group => group.id === selectedProviderId), [groups, selectedProviderId])
+  const providerLabel = providerGroups[0]?.provider.name ?? t('provider.select')
+  const showSearch = providerGroups.some(group => group.models.length > 4)
+  const filteredGroups = useMemo(() => providerGroups.map(group => ({
     ...group, models: rankByName(group.models, showSearch ? query.trim() : ''),
-  })).filter(group => group.models.length > 0), [groups, query, showSearch])
+  })).filter(group => group.models.length > 0), [providerGroups, query, showSearch])
   const visibleModels = useMemo(() => filteredGroups.flatMap(group => group.models.map(model => ({
     provider: group.id, model: model.id,
   }))), [filteredGroups])
@@ -250,6 +256,7 @@ export function ModelSelect(
   if (!available) return null
 
   const show = (): void => {
+    setProviderOpen(false)
     setSelectionFocus(false)
     triggerRef.current?.focus()
     setQuery('')
@@ -470,6 +477,48 @@ export function ModelSelect(
         if (event.target instanceof Element && event.target.closest('button') !== null) event.preventDefault()
       }}
     >
+      <Menu
+        open={providerOpen}
+        portal
+        side="top"
+        align="start"
+        autoFocus
+        className={css.providerPicker}
+        selectedId={selectedProviderId}
+        items={[
+          ...groups.map(group => ({ id: group.id, label: group.provider.name, disabled: locked || busy || group.models.length === 0 })),
+          ...state.failures.map(failure => ({ id: `failure:${failure.id}`,
+            label: t('warning.groupLoad', { name: failure.name, message: failure.message }), disabled: true })),
+          ...groups.length === 0 && state.failures.length === 0
+            ? [{ id: 'empty', label: t(state.status === 'loading' ? 'status.loading' : 'empty.models'), disabled: true }] : [],
+        ]}
+        onClose={() => { setProviderOpen(false) }}
+        onSelect={(provider) => {
+          setProviderOpen(false)
+          if (locked || busy) return
+          if (provider === state.current?.provider) return
+          const first = choices.find(choice => choice.selection.provider === provider)
+          if (first !== undefined) submit(first.selection)
+        }}
+        anchor={<button
+          type="button"
+          className={clsx(css.trigger, css.providerTrigger)}
+          aria-label={providerGroups.length === 0 ? t('provider.select') : t('provider.aria', { provider: providerLabel })}
+          aria-haspopup="menu"
+          aria-expanded={providerOpen}
+          disabled={locked || busy}
+          title={providerLabel}
+          onClick={() => {
+            setOpen(false)
+            setProviderOpen(!providerOpen)
+            if (!providerOpen) reload()
+          }}
+        >
+          <IconGlobeOutlineRegular className={css.triggerIcon} size={16} />
+          <span className={css.triggerLabel}>{providerLabel}</span>
+          <IconChevronDownOutlineRegular className={clsx(css.chevron, providerOpen && css.chevronOpen)} />
+        </button>}
+      />
       <button
         ref={triggerRef}
         type="button"
@@ -631,7 +680,7 @@ export function ModelSelect(
                 })}
               </div>
               {state.status === 'ready' && filteredGroups.length === 0 && (
-                <div className={css.empty} role="status">{t(choices.length === 0 ? 'empty.models' : 'search.empty')}</div>
+                <div className={css.empty} role="status">{t(providerGroups.every(group => group.models.length === 0) ? 'empty.models' : 'search.empty')}</div>
               )}
             </>
           )}

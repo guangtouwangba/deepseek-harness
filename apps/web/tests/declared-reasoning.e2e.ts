@@ -47,6 +47,8 @@ describe.skipIf(MODE === 'record').each([
             { id: 'acme-think', name: 'Acme Think' },
             { id: 'acme-swift', name: 'Acme Swift' },
             { id: 'acme-lite', name: 'Acme Lite' },
+            { id: 'acme-micro', name: 'Acme Micro' },
+            { id: 'acme-nano', name: 'Acme Nano' },
           ].map(model => ({
             ...model,
             reasoningEfforts: { off: null, high: 'high', max: 'ultra' },
@@ -185,7 +187,7 @@ describe.skipIf(MODE === 'record').each([
     try {
       await expect.poll(() => menu.count()).toBe(1)
       await expect.poll(() => search.evaluate(element => element === element.ownerDocument.activeElement)).toBe(true)
-      await page.getByText('Acme Gateway', { exact: true }).hover()
+      await page.getByRole('group', { name: 'Acme Gateway', exact: true }).locator('[data-menu-group-heading]').hover()
     } finally {
       await page.mouse.up()
     }
