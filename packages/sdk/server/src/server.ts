@@ -9,7 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { resolve } from 'node:path'
 import { SdkUserQuestionBridge } from './user-questions.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { carrierKeyOf, type Scoped } from '@deepseek-ai/dsh-scope'
@@ -492,14 +492,20 @@ export class HarnessSdkJsonRpcServer {
     const handle = await (resume ? this.ctx.agents.resume({
       resumeSessionId: brandString<SessionId>(sessionId),
       agentOptions,
-      // The initialized route replaces the restored Session's model selection.
+      // The initialized route replaces the restored Session's model selection;
+      // an omitted effort or service tier survives only on the same route.
       setup: (_agentCtx, agent) => {
         const previous = agent.model.current()
-        const selection = { ...agentOptions }
+        const selection: ModelSelection & { maxTokens?: number } = { ...agentOptions }
         if (selection.reasoningEffort === undefined && previous !== undefined
           && previous.provider === selection.provider && previous.model === selection.model
           && previous.reasoningEffort !== undefined) {
           selection.reasoningEffort = previous.reasoningEffort
+        }
+        if (previous !== undefined
+          && previous.provider === selection.provider && previous.model === selection.model
+          && previous.serviceTier !== undefined) {
+          selection.serviceTier = previous.serviceTier
         }
         agent.model.select(selection)
       },

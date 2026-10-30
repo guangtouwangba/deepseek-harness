@@ -24,7 +24,7 @@ import type {
   InboxState,
 } from '@deepseek-ai/dsh-agent'
 import { modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
-import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { errorChain, ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm'
 import { interruptedTurnClosers, SessionLogOffset, SessionPreparation } from '@deepseek-ai/dsh-session'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -300,6 +300,7 @@ export class AgentLoop extends Service implements AgentFactory {
       provider: z.string(),
       model: z.string(),
       reasoningEffort: z.string().min(1) as z<ReturnType<typeof ReasoningEffortId>>,
+      serviceTier: z.string().min(1) as z<ReturnType<typeof ServiceTierId>>,
       maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
       cwd: z.string(),
       resumeSessionId: z.string(),
@@ -371,14 +372,24 @@ export class AgentLoop extends Service implements AgentFactory {
   }
 
   private applyConfiguredRoute(agent: Agent, options: AgentOptions): void {
-    const { provider, model, reasoningEffort } = options
+    const { provider, model, reasoningEffort, serviceTier } = options
     if (!provider || !model) return
     const previous = agent.model.current()
-    const selection: ModelSelection = { provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort } }
+    const selection: ModelSelection = {
+      provider,
+      model,
+      ...reasoningEffort === undefined ? {} : { reasoningEffort },
+      ...serviceTier === undefined ? {} : { serviceTier },
+    }
     if (selection.reasoningEffort === undefined && previous !== undefined
       && previous.provider === selection.provider && previous.model === selection.model
       && previous.reasoningEffort !== undefined) {
       selection.reasoningEffort = previous.reasoningEffort
+    }
+    if (selection.serviceTier === undefined && previous !== undefined
+      && previous.provider === selection.provider && previous.model === selection.model
+      && previous.serviceTier !== undefined) {
+      selection.serviceTier = previous.serviceTier
     }
     agent.model.select(selection)
   }

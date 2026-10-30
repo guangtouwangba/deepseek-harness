@@ -369,7 +369,8 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
   // that DOES configure one has to join it here first
   // (@deepseek-ai/dsh-agent-preset-registry README, "Composing a child agent").
   const setup = (agentCtx: Context, agent: Agent): void => {
-    // A resumed Session continues with this run's configured model.
+    // A resumed Session continues with this run's configured model. An omitted
+    // effort or service tier preserves the saved value only for the same route.
     if (config.sessionId !== undefined) {
       const previous = agent.model.current()
       const configured = { ...selection }
@@ -377,6 +378,11 @@ async function run(ctx: Context, config: Config, io: HeadlessIo): Promise<void> 
         && previous.provider === configured.provider && previous.model === configured.model
         && previous.reasoningEffort !== undefined) {
         configured.reasoningEffort = previous.reasoningEffort
+      }
+      if (configured.serviceTier === undefined && previous !== undefined
+        && previous.provider === configured.provider && previous.model === configured.model
+        && previous.serviceTier !== undefined) {
+        configured.serviceTier = previous.serviceTier
       }
       agent.model.select(configured)
     }

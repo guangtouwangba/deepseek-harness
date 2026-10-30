@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent, type ModelSelection } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, LlmError, ReasoningEffortId, ServiceTierId, type GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { toPiContext } from '@deepseek-ai/dsh-llm-pi-ai/src/context.ts'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -483,6 +483,37 @@ describe('prepared-route prompt admission', () => {
     expect(events.at(-1)).toMatchObject({
       type: 'turn/end', data: { reason: { kind: 'error', error: {
         message: `agent "admission": agent/request proposed reasoning effort "${proposed ?? 'adapter default'}" after step preparation fixed "${selected ?? 'adapter default'}"; use agent.model.select() before step preparation`,
+      } } },
+    })
+  })
+
+  it.each([
+    { selected: undefined, proposed: ServiceTierId('fast') },
+    { selected: ServiceTierId('fast'), proposed: ServiceTierId('standard') },
+    { selected: ServiceTierId('fast'), proposed: undefined },
+  ])('rejects an agent/request tier change from $selected to $proposed before input admission', async ({ selected, proposed }) => {
+    const adapter = new MockAdapter([textResponse('never')], undefined, undefined, {
+      tiers: [
+        { id: ServiceTierId('standard'), name: 'Standard' },
+        { id: ServiceTierId('fast'), name: 'Fast' },
+      ],
+    })
+    const h = await harness(adapter)
+    h.agent.model.select({
+      provider: 'capable', model: 'model', ...selected === undefined ? {} : { serviceTier: selected },
+    })
+    h.ctx.on('agent/request', async (_payload, next) => {
+      const { serviceTier: _tier, ...config } = await next()
+      return { ...config, ...proposed === undefined ? {} : { serviceTier: proposed } }
+    })
+
+    await send(h.agent, 'reject the changed tier')
+    expect(adapter.requests).toEqual([])
+    const events = h.agent.session.snapshotEvents()
+    expect(events.filter(event => ['request/header', 'user/message', 'system/message'].includes(event.type))).toEqual([])
+    expect(events.at(-1)).toMatchObject({
+      type: 'turn/end', data: { reason: { kind: 'error', error: {
+        message: `agent "admission": agent/request proposed service tier "${proposed ?? 'provider default'}" after step preparation fixed "${selected ?? 'provider default'}"; use agent.model.select() before step preparation`,
       } } },
     })
   })

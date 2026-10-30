@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Give newly created agents a shared default provider and model when their sessions do not specify one. Provider, model, and reasoning effort are live Config fields. Saved selections update the active profile patch and apply to subsequent reads; per-session selection belongs to the [Agent model API](../agent/README.md).
+Give newly created agents a shared default provider and model when their sessions do not specify one. Provider, model, reasoning effort, and service tier are live Config fields. Saved selections update the active profile patch and apply to subsequent reads; per-session selection belongs to the [Agent model API](../agent/README.md).
 
 ## Table of Contents
 
@@ -43,11 +43,11 @@ The composition requires a provider and model. Consumers read the live reference
 | `provider` | required | Registered provider route for fresh agents |
 | `model` | required | Provider-owned model id for fresh agents |
 
-The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-default-model) lists every accepted field. `reasoningEffort` is optional; saving a selection without it removes that field from the profile’s complete config override.
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-default-model) lists every accepted field. `reasoningEffort` and `serviceTier` are optional; saving a selection without either removes the omitted field from the profile’s complete config override.
 
 ### Read and change the default
 
-`currentSelection()` returns a detached `{ provider, model, reasoningEffort? }` for a newly created agent; `saveSelection()` stores the complete selection for later agents.
+`currentSelection()` returns a detached `{ provider, model, reasoningEffort?, serviceTier? }` for a newly created agent; `saveSelection()` stores the complete selection for later agents.
 
 ```text
 const selection = ctx.agentDefaultModel.currentSelection()

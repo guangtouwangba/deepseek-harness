@@ -89,6 +89,7 @@ export interface ModelSelection {
   readonly provider: string
   readonly model: string
   readonly reasoningEffort?: string
+  readonly serviceTier?: string
 }
 
 /** One adapter-owned reasoning effort for an exact model route. */
@@ -104,12 +105,25 @@ export interface ModelReasoning {
   readonly defaultEffort?: string
 }
 
+/** One adapter-owned service tier for an exact model route. */
+export interface ModelServiceTier {
+  readonly id: string
+  readonly name: string
+  readonly description?: string
+}
+
+/** Selectable service tiers for one exact model route; absence means the route serves none. */
+export interface ModelServiceTiers {
+  readonly tiers: readonly ModelServiceTier[]
+}
+
 /** One model displayed inside its provider group. */
 export interface ModelCatalogModel {
   readonly id: string
   readonly name: string
   readonly description?: string
   readonly reasoning?: ModelReasoning
+  readonly serviceTiers?: ModelServiceTiers
   /** Provider-authored label shown beside the name; display data only. */
   readonly badge?: LlmModelBadge
 }

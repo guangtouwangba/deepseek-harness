@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { Session, SessionId, SessionSeq, canonicalHeader, foldRequestHeader, headerEquals } from '@deepseek-ai/dsh-session'
 import type { EpochHeader, SessionEvent } from '@deepseek-ai/dsh-session'
-import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 
 const CONFIG = { provider: 'mock', model: 'm' }
@@ -50,6 +50,14 @@ describe('headerEquals', () => {
         adapterDefaults: { maxTokens: true },
       },
     )).toBe(false)
+    expect(headerEquals(
+      { ...base, config: { ...base.config, serviceTier: ServiceTierId('fast') } },
+      { ...base, config: { ...base.config, serviceTier: ServiceTierId('flex') } },
+    )).toBe(false)
+    expect(headerEquals(
+      { ...base, config: { ...base.config, serviceTier: ServiceTierId('fast') } },
+      { ...base, config: { ...base.config, serviceTier: ServiceTierId('fast') } },
+    )).toBe(true)
     expect(headerEquals(base, { ...base, tools: [] })).toBe(false)
     expect(headerEquals(base, { ...base, tools: [tool('a', 'changed')] })).toBe(false)
     expect(headerEquals({ config: CONFIG, tools: [tool('a'), tool('b')] }, { config: CONFIG, tools: [tool('b'), tool('a')] })).toBe(false)

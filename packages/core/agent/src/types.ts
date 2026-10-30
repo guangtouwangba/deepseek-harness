@@ -4,7 +4,7 @@
  * @module @deepseek-ai/dsh-agent/types
  */
 
-import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import type { ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm/brand'
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
 // Type-only: the Workspace registry's archive-admission family map this registry merges `turn` into.
 import type {} from '@deepseek-ai/dsh-workspace/types'
@@ -75,7 +75,7 @@ export interface TurnBoundaryProjection {
   readonly lastTurn: number
 }
 
-/** Complete provider, model, and optional reasoning effort chosen for one Session's model steps. */
+/** Complete provider, model, optional reasoning effort, and optional service tier chosen for one Session's model steps. */
 export interface ModelSelection {
   /** Registered provider route. */
   provider: string
@@ -83,6 +83,8 @@ export interface ModelSelection {
   model: string
   /** Adapter-owned reasoning effort, or provider/default behavior when absent. */
   reasoningEffort?: ReasoningEffortId
+  /** Adapter-owned service tier, or the provider's default tier when absent. */
+  serviceTier?: ServiceTierId
 }
 
 /** Client view of the durable model-selection fold. */

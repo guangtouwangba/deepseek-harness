@@ -9,7 +9,7 @@ import type {
   SaveImageAttachment,
   StoredImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
-import LlmRuntime, { createToolResultMessage, createUserMessage, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, ReasoningEffortId, userAgent } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createToolResultMessage, createUserMessage, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, ReasoningEffortId, ServiceTierId, userAgent } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
@@ -601,6 +601,165 @@ describe('provider profile lifecycle', () => {
         defaultEffort: ReasoningEffortId('high'),
       },
     })
+  })
+
+  it('advertises route service tiers on every model the route serves', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: 'https://acme.test/v1',
+          serviceTiers: { standard: 'default', flex: null },
+          models: [{ id: 'acme-tier' }, { id: 'acme-sibling' }],
+        },
+        'acme-plain': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: 'https://plain.test/v1',
+          models: [{ id: 'acme-plain-model' }],
+        },
+      },
+    })
+
+    const serviceTiers = {
+      tiers: [
+        { id: ServiceTierId('standard'), name: 'Standard' },
+        { id: ServiceTierId('flex'), name: 'Flex' },
+      ],
+    }
+    // The dict is route-level, so every model on the route offers it.
+    await expect(ctx.llm.resolveModelInfo('acme-gateway', 'acme-tier'))
+      .resolves.toMatchObject({ serviceTiers })
+    await expect(ctx.llm.resolveModelInfo('acme-gateway', 'acme-sibling'))
+      .resolves.toMatchObject({ serviceTiers })
+    expect((await ctx.llm.resolveModelInfo('acme-plain', 'acme-plain-model')).serviceTiers).toBeUndefined()
+  })
+
+  it('sends the selected service tier wire value and omits the field for a null tier', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          serviceTiers: { standard: 'default', flex: null },
+          models: [{ id: 'acme-tier', contextWindow: 65_536, maxTokens: 4096 }],
+        },
+      },
+    })
+
+    await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-tier',
+      serviceTier: ServiceTierId('standard'),
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'tier prompt' }],
+        source: { kind: 'user' },
+      })],
+    })
+    expect(server.requests[0]).toMatchObject({
+      model: 'acme-tier',
+      messages: [{ role: 'user', content: 'tier prompt' }],
+      service_tier: 'default',
+    })
+
+    await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-tier',
+      serviceTier: ServiceTierId('flex'),
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'tier prompt' }],
+        source: { kind: 'user' },
+      })],
+    })
+    expect(server.requests[1]).not.toHaveProperty('service_tier')
+    // The rest of the body survives the payload hook unchanged.
+    expect(server.requests[1]).toMatchObject({
+      model: 'acme-tier',
+      messages: [{ role: 'user', content: 'tier prompt' }],
+    })
+  })
+
+  it('refuses a service tier the route does not offer before network I/O', async () => {
+    const adapter = adapterOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test/v1',
+        serviceTiers: { standard: 'default' },
+        models: [{ id: 'acme-tier' }],
+      },
+      'acme-plain': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test/v1',
+        models: [{ id: 'acme-plain-model' }],
+      },
+    })
+    const drain = async (provider: string, model: string): Promise<void> => {
+      for await (const _chunk of adapter.stream({
+        provider,
+        model,
+        serviceTier: ServiceTierId('missing'),
+        messages: [],
+      })) { /* drain */ }
+    }
+
+    // The LLM service rejects an unknown tier first; this proves the adapter
+    // enforces the same rule for a direct stream call.
+    await expect(drain('acme-gateway', 'acme-tier')).rejects.toMatchObject({
+      code: 'UNSUPPORTED_SERVICE_TIER',
+      message: 'pi-ai provider "acme-gateway" model "acme-tier" does not support service tier "missing"',
+    })
+    await expect(drain('acme-plain', 'acme-plain-model')).rejects.toMatchObject({
+      code: 'UNSUPPORTED_SERVICE_TIER',
+    })
+  })
+
+  it('refuses service tiers on a protocol that cannot carry service_tier', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-claude': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'anthropic-messages',
+          baseURL: 'https://acme.test',
+          serviceTiers: { standard: 'default' },
+          models: [{ id: 'acme-claude-model' }],
+        },
+      },
+    })
+
+    await expect(ctx.llm.resolveModelInfo('acme-claude', 'acme-claude-model')).rejects.toMatchObject({
+      code: 'INVALID_CONFIG',
+      message: 'pi-ai provider "acme-claude" model "acme-claude-model" configures service tiers'
+        + ' but its protocol "anthropic-messages" cannot carry service_tier',
+    })
+
+    // A direct stream call bypasses model metadata resolution and must still
+    // refuse to put the field on a protocol that cannot read it.
+    const direct = adapterOf({
+      'acme-claude': {
+        api: 'anthropic-messages',
+        baseURL: 'https://acme.test',
+        serviceTiers: { standard: 'default' },
+        models: [{ id: 'acme-claude-model' }],
+      },
+    })
+    await expect((async () => {
+      for await (const _chunk of direct.stream({
+        provider: 'acme-claude',
+        model: 'acme-claude-model',
+        serviceTier: ServiceTierId('standard'),
+        messages: [],
+      })) { /* drain */ }
+    })()).rejects.toMatchObject({ code: 'INVALID_CONFIG' })
   })
 
   it('sends the declared wire spelling and refuses undeclared levels before network I/O', async () => {

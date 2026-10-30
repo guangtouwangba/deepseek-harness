@@ -19,6 +19,7 @@ import type {
   LlmModelContext,
   LlmModelDiscoveryRequest,
   LlmModelInfo,
+  LlmModelServiceTiersInfo,
   LlmResolvedModelInfo,
   LlmProviderInfo,
   ModelModality,
@@ -840,8 +841,13 @@ export class LlmRuntime extends TypertRemoteService {
       ...resolved.systemPromptUpdate === undefined ? {} : { systemPromptUpdate: resolved.systemPromptUpdate },
       ...resolved.toolUpdate === undefined ? {} : { toolUpdate: resolved.toolUpdate },
     }
+    const serviceTiers = this.normalizeServiceTiers(registration, model, resolved.serviceTiers)
+    const infoWithTiers: LlmResolvedModelInfo = {
+      ...info,
+      ...serviceTiers === undefined ? {} : { serviceTiers },
+    }
     const reasoning = resolved.reasoning
-    if (reasoning === undefined) return info
+    if (reasoning === undefined) return infoWithTiers
     if (reasoning.efforts.length === 0) {
       throw new LlmError(
         `adapter returned invalid reasoning metadata for provider "${provider}" model "${model}"`,
@@ -877,12 +883,59 @@ export class LlmRuntime extends TypertRemoteService {
       )
     }
     return {
-      ...info,
+      ...infoWithTiers,
       reasoning: {
         efforts,
         ...reasoning.defaultEffort === undefined ? {} : { defaultEffort: reasoning.defaultEffort },
       },
     }
+  }
+
+  /**
+   * Validate and detach one adapter-returned service-tier offer. An empty or
+   * duplicate-bearing offer is an adapter defect, not an unavailable feature:
+   * a route that cannot serve tiers omits the field instead.
+   * @param registration - adapter registration that produced the metadata.
+   * @param model - model id the metadata describes.
+   * @param serviceTiers - adapter-returned tiers, or undefined when it offers none.
+   * @returns detached tier metadata, or undefined when none was offered.
+   */
+  private normalizeServiceTiers(
+    registration: AdapterRegistration,
+    model: string,
+    serviceTiers: LlmModelServiceTiersInfo | undefined,
+  ): LlmModelServiceTiersInfo | undefined {
+    if (serviceTiers === undefined) return undefined
+    const provider = registration.provider.id
+    const seen = new Set<string>()
+    if (serviceTiers.tiers.length === 0) {
+      throw new LlmError(
+        `adapter returned an empty service tier offer for provider "${provider}" model "${model}"`,
+        'INVALID_MODEL_SERVICE_TIERS',
+      )
+    }
+    const tiers = serviceTiers.tiers.map((tier) => {
+      if (
+        typeof tier.id !== 'string'
+        || tier.id.length === 0
+        || typeof tier.name !== 'string'
+        || tier.name.length === 0
+        || (tier.description !== undefined && typeof tier.description !== 'string')
+        || seen.has(tier.id)
+      ) {
+        throw new LlmError(
+          `adapter returned invalid or duplicate service tier metadata for provider "${provider}" model "${model}"`,
+          'INVALID_MODEL_SERVICE_TIERS',
+        )
+      }
+      seen.add(tier.id)
+      return {
+        id: tier.id,
+        name: tier.name,
+        ...tier.description === undefined ? {} : { description: tier.description },
+      }
+    })
+    return { tiers }
   }
 
   /**
@@ -916,6 +969,15 @@ export class LlmRuntime extends TypertRemoteService {
     const defaulted = config.maxTokens === undefined && info.defaultMaxTokens !== undefined
       ? { ...config, maxTokens: info.defaultMaxTokens }
       : config
+    const requestedTier = defaulted.serviceTier
+    if (requestedTier !== undefined
+      && (info.serviceTiers === undefined
+        || !info.serviceTiers.tiers.some(tier => tier.id === requestedTier))) {
+      throw new LlmError(
+        `provider "${config.provider}" model "${config.model}" does not support service tier "${requestedTier}"`,
+        'UNSUPPORTED_SERVICE_TIER',
+      )
+    }
     const reasoning = info.reasoning
     const requested = defaulted.reasoningEffort
     let resolvedConfig = defaulted

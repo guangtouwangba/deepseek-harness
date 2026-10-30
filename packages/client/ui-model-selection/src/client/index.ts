@@ -94,6 +94,7 @@ function selectionOf(state: ModelDirectoryState, id: string): ModelSelection | u
         provider: group.id,
         model: model.id,
         ...reasoningEffort === undefined ? {} : { reasoningEffort },
+        ...sameRoute && state.current?.serviceTier !== undefined ? { serviceTier: state.current.serviceTier } : {},
       }
     }
   }

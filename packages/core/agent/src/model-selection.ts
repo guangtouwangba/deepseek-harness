@@ -5,7 +5,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Model, AgentOptions, PreStepDecision } from './runtime-types.ts'
 import type { ModelSelection } from './types.ts'
 import { boundContextSummary, createUserMessage, type ContextFormed } from '@deepseek-ai/dsh-llm'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import { ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm/brand'
 import type { Session, EpochHeader } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { z } from 'zod'
@@ -23,14 +23,25 @@ export interface ModelSelectionProjectionState {
 }
 
 /**
- * Build a detached selection, omitting an absent effort.
+ * Build a detached selection, omitting absent adapter-owned choices.
  * @param provider - provider route.
  * @param model - provider-owned model id.
  * @param reasoningEffort - explicit effort; omission follows adapter defaults.
+ * @param serviceTier - explicit service tier; omission follows the provider default.
  * @returns a detached selection.
  */
-function toSelection(provider: string, model: string, reasoningEffort: ReasoningEffortId | undefined): ModelSelection {
-  return { provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort } }
+function toSelection(
+  provider: string,
+  model: string,
+  reasoningEffort: ReasoningEffortId | undefined,
+  serviceTier: ServiceTierId | undefined,
+): ModelSelection {
+  return {
+    provider,
+    model,
+    ...reasoningEffort === undefined ? {} : { reasoningEffort },
+    ...serviceTier === undefined ? {} : { serviceTier },
+  }
 }
 
 /**
@@ -44,25 +55,32 @@ function sameRoute(left: ModelSelection, right: ModelSelection): boolean {
 }
 
 /**
- * Compare complete selections, treating absent effort as its own value.
+ * Compare complete selections, treating an absent adapter-owned choice as its own value.
  * @param left - first selection, or no recorded selection.
  * @param right - second selection, or no recorded selection.
  * @returns whether both selections agree.
  */
 function sameModelSelection(left: ModelSelection | null, right: ModelSelection | null): boolean {
   return left === right || (left !== null && right !== null
-    && sameRoute(left, right) && left.reasoningEffort === right.reasoningEffort)
+    && sameRoute(left, right) && left.reasoningEffort === right.reasoningEffort
+    && left.serviceTier === right.serviceTier)
 }
 
 /** Selection a recorded request used, omitting an effort the adapter defaulted. */
 function selectionOfHeader({ config, adapterDefaults }: EpochHeader): ModelSelection {
-  return toSelection(config.provider, config.model, adapterDefaults?.reasoningEffort === true ? undefined : config.reasoningEffort)
+  return toSelection(
+    config.provider,
+    config.model,
+    adapterDefaults?.reasoningEffort === true ? undefined : config.reasoningEffort,
+    config.serviceTier,
+  )
 }
 
 const selectionSchema = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
   reasoningEffort: z.string().min(1).transform(ReasoningEffortId).exactOptional(),
+  serviceTier: z.string().min(1).transform(ServiceTierId).exactOptional(),
 }).nullable()
 
 /**
@@ -71,7 +89,7 @@ const selectionSchema = z.object({
  */
 export const modelSelectionProjectionDefinition: Required<ProjectionDefinition<'modelSelection', ModelSelectionProjectionState>> = {
   key: 'modelSelection',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema: z.object({ lastUsed: selectionSchema, pending: selectionSchema }),
   init: () => ({ lastUsed: null, pending: null }),
   apply: (state, event) => {
@@ -105,13 +123,15 @@ export class AgentModel implements Model {
   current(): Readonly<ModelSelection> | undefined {
     const recorded = this.recordedSelection()
     if (recorded !== null) return { ...recorded }
-    const { provider, model, reasoningEffort } = this.options
-    return provider && model ? toSelection(provider, model, reasoningEffort) : undefined
+    const { provider, model, reasoningEffort, serviceTier } = this.options
+    return provider && model ? toSelection(provider, model, reasoningEffort, serviceTier) : undefined
   }
 
   select(selection: Readonly<ModelSelection>): void {
     if (sameModelSelection(this.recordedSelection(), selection)) return
-    this.session.append('model/selection', toSelection(selection.provider, selection.model, selection.reasoningEffort))
+    this.session.append('model/selection', toSelection(
+      selection.provider, selection.model, selection.reasoningEffort, selection.serviceTier,
+    ))
   }
 
   private recordedSelection(): ModelSelection | null {

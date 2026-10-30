@@ -7,7 +7,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
-import type { MessageId, ToolCallId, ProviderRequestId, ReasoningEffortId } from './brand.ts'
+import type { MessageId, ToolCallId, ProviderRequestId, ReasoningEffortId, ServiceTierId } from './brand.ts'
 import type { Message, UserMessage } from './message.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -431,6 +431,22 @@ export interface LlmModelReasoningInfo {
   defaultEffort?: ReasoningEffortId
 }
 
+/** Display metadata for one adapter-owned service tier. */
+export interface LlmServiceTierInfo {
+  /** Opaque stable value accepted by {@link GenerateOptions.serviceTier}. */
+  id: ServiceTierId
+  /** Human-readable tier name for selectors and diagnostics. */
+  name: string
+  /** Optional user-facing distinction from otherwise similar tiers. */
+  description?: string
+}
+
+/** Selectable service tiers for one exact provider/model route. */
+export interface LlmModelServiceTiersInfo {
+  /** Supported tiers in display order. */
+  tiers: readonly LlmServiceTierInfo[]
+}
+
 /**
  * How a model applies a system prompt that changes mid-conversation.
  * `'in-history'`: the model reads the latest `system` message at any position
@@ -458,6 +474,8 @@ export interface LlmResolvedModelInfo extends LlmModelInfo {
   defaultMaxTokens?: number
   /** Adapter-owned selectable reasoning levels when exposed. */
   reasoning?: LlmModelReasoningInfo
+  /** Adapter-owned selectable service tiers when exposed; absence means the route serves none. */
+  serviceTiers?: LlmModelServiceTiersInfo
   /** Declared mid-conversation system prompt handling; absent means only a leading system message is read. */
   systemPromptUpdate?: SystemPromptUpdate
   /** Declared mid-conversation tool declaration handling; absent means every request declares the complete tool list. */
@@ -558,6 +576,8 @@ export interface GenerateOptions {
   model: string
   /** Adapter-owned reasoning effort selected for this exact model. */
   reasoningEffort?: ReasoningEffortId
+  /** Adapter-owned service tier selected for this exact model; absence defers to the provider's default tier. */
+  serviceTier?: ServiceTierId
   /**
    * Ordered conversation messages, exactly as the provider sees them. A
    * loop-built request passes the derived history (dsh-agent-loop), whose

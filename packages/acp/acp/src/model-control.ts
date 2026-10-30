@@ -30,7 +30,9 @@ export class AcpModelConfigError extends Error {
 /**
  * Project and mutate one Agent's provider/model/reasoning selection through ACP
  * config options. The Session's recorded model selection is the only state; a
- * change applies from the Agent's next model step.
+ * change applies from the Agent's next model step. An effort change preserves
+ * the recorded service tier for the same route, and a model change never
+ * inherits the previous route's tier.
  */
 export class AcpModelControl {
   private tail = Promise.resolve()
@@ -81,6 +83,7 @@ export class AcpModelControl {
         this.model.select(await this.resolveSelection({
           provider: current.provider,
           model: current.model,
+          ...current.serviceTier === undefined ? {} : { serviceTier: current.serviceTier },
           ...providerDefault ? {} : { reasoningEffort: ReasoningEffortId(value) },
         }, signal))
       } else {
@@ -184,6 +187,7 @@ export class AcpModelControl {
       provider: resolved.provider,
       model: resolved.model,
       ...resolved.reasoningEffort === undefined ? {} : { reasoningEffort: resolved.reasoningEffort },
+      ...selection.serviceTier === undefined ? {} : { serviceTier: selection.serviceTier },
     }
   }
 }

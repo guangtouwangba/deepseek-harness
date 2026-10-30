@@ -3,7 +3,7 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ServiceTierId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -17,7 +17,9 @@ import * as tool from '../src/index.ts'
 import {
   assertAllowedModelRoutes,
   assertAllowedModelSelection,
+  hasConfiguredLlmSelection,
   preflightChildLlmRoute,
+  requestedAgentOptions,
 } from '../src/model-selection.ts'
 import { callSubagent, modelSelectionSetupAgent, setup, text } from './harness.ts'
 
@@ -91,6 +93,51 @@ describe('dsh-tool-subagent model selection', () => {
         { reasoning_effort: 'low' },
       )
     }).toThrow('without an effective provider and model')
+  })
+
+  it('drops configured route-owned values on a route change and preserves them otherwise', () => {
+    const parent = { provider: 'alpha', model: 'parent-model' }
+    const configured = {
+      provider: 'alpha',
+      model: 'parent-model',
+      reasoningEffort: ReasoningEffortId('high'),
+      serviceTier: ServiceTierId('flex'),
+    }
+
+    expect(requestedAgentOptions(parent, configured, { reasoning_effort: 'low' }, true)).toEqual({
+      provider: 'alpha',
+      model: 'parent-model',
+      reasoningEffort: ReasoningEffortId('low'),
+      serviceTier: ServiceTierId('flex'),
+    })
+    expect(requestedAgentOptions(parent, configured, { provider: 'alpha', model: 'other-model' }, true))
+      .toEqual({ provider: 'alpha', model: 'other-model' })
+    expect(requestedAgentOptions(parent, configured, {
+      provider: 'alpha',
+      model: 'other-model',
+      reasoning_effort: 'max',
+    }, true)).toEqual({
+      provider: 'alpha',
+      model: 'other-model',
+      reasoningEffort: ReasoningEffortId('max'),
+    })
+  })
+
+  it('treats a configured service tier as an LLM selection requiring validation', () => {
+    expect(hasConfiguredLlmSelection({ serviceTier: ServiceTierId('flex') })).toBe(true)
+    expect(hasConfiguredLlmSelection({ maxTokens: 64 })).toBe(false)
+  })
+
+  it('validates an inherited service tier only while the parent route is unchanged', async () => {
+    const ctx = await setup({ provider: 'mock' })
+    ctx.llm.registerAdapter(['alpha'], new MockAdapter([]))
+    const signal = new AbortController().signal
+    const parent = { provider: 'alpha', model: 'parent-model', serviceTier: ServiceTierId('flex') }
+
+    await expect(preflightChildLlmRoute(ctx.llm, parent, undefined, signal))
+      .rejects.toThrow(/does not support service tier "flex"/)
+    await expect(preflightChildLlmRoute(ctx.llm, parent, { provider: 'alpha', model: 'other-model' }, signal))
+      .resolves.toBeUndefined()
   })
 
   it('leaves deployment or parent defaults outside the allowlist usable when the call selects nothing', async () => {

@@ -13,7 +13,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
-import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions, LlmCallConfigAdapterDefaults, LlmModelInfo,
   LlmModelReasoningInfo, LlmProviderInfo, LlmResolvedModelInfo, StreamChunk,
@@ -326,6 +326,60 @@ describe('Web session model selection', () => {
     expect(expectValue(await remote.selectModel(request({
       sessionId, provider: 'text-only', model: 'plain',
     }))).selected).toEqual({ provider: 'text-only', model: 'plain' })
+    await ctx.fiber.dispose()
+  })
+
+  it('publishes an exact route service tier offer and records or refuses a selected tier', async () => {
+    const ctx = new Context()
+    const { sessionId, agent } = await harness({ provider: 'deepseek-official', model: 'deepseek-chat' }, ctx)
+    ctx.llm.registerAdapter(['tiered'], new class extends CatalogAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({
+          provider,
+          id: model,
+          name: model,
+          serviceTiers: {
+            tiers: [
+              { id: ServiceTierId('standard'), name: 'Standard' },
+              { id: ServiceTierId('fast'), name: 'Fast' },
+            ],
+          },
+        })
+      }
+    }('Tiered', [{ provider: 'tiered', id: 'model', name: 'Model' }]))
+    const remote = await createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+
+    const catalog = await buildModelCatalog(ctx)
+    expect(catalog.groups.find(group => group.id === 'tiered')?.models).toEqual([{
+      id: 'model',
+      name: 'Model',
+      serviceTiers: {
+        tiers: [
+          { id: 'standard', name: 'Standard' },
+          { id: 'fast', name: 'Fast' },
+        ],
+      },
+    }])
+
+    const selected = expectValue(await remote.selectModel(request({
+      sessionId, provider: 'tiered', model: 'model', serviceTier: 'fast',
+    })))
+    expect(selected.selected).toEqual({ provider: 'tiered', model: 'model', serviceTier: 'fast' })
+    expect(agent.model.current()).toEqual(selected.selected)
+
+    const unsupported = await remote.selectModel(request({
+      sessionId, provider: 'tiered', model: 'model', serviceTier: 'flex',
+    }))
+    expect(unsupported).toMatchObject({
+      ok: false,
+      error: {
+        code: 'session/model-unavailable',
+        message: 'provider "tiered" model "model" does not support service tier "flex"',
+      },
+    })
     await ctx.fiber.dispose()
   })
 

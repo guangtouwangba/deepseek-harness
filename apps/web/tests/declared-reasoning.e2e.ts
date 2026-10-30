@@ -20,6 +20,7 @@ const OVERLAY = fileURLToPath(new URL('./declared-reasoning.overlay.yml', import
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/declared-reasoning', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('./expected/declared-reasoning/ui.expected.md', import.meta.url))
 const POINTER_EXPECTED = fileURLToPath(new URL('./expected/declared-reasoning/pointer-menu.expected.md', import.meta.url))
+const SPEED_EXPECTED = fileURLToPath(new URL('./expected/declared-reasoning/speed.expected.md', import.meta.url))
 const MODE = webSnapshotMode()
 
 describe.skipIf(MODE === 'record').each([
@@ -53,6 +54,9 @@ describe.skipIf(MODE === 'record').each([
             ...model,
             reasoningEfforts: { off: null, high: 'high', max: 'ultra' },
           })),
+          // Route-declared speed tiers: an adapter id per wire service_tier, so
+          // the composer offers the same two levels for every model here.
+          serviceTiers: { standard: 'default', fast: 'priority' },
         },
       },
     })
@@ -134,6 +138,54 @@ describe.skipIf(MODE === 'record').each([
     ).toBe(true)
     await page.keyboard.press('Shift+Tab')
     await expect.poll(() => page.getByRole('menu').count(), { timeout: 10_000 }).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('offers the declared speed tiers and records the picked tier without disturbing the effort', async () => {
+    onTestFailed(() => saveFailureShot(page, `web-e2e-model-speed-${engine.name()}`))
+    const trigger = page.getByRole('button', { name: /^选择模型/ })
+    await trigger.click()
+    await page.getByRole('menuitem', { name: /推理等级/ }).click()
+    await page.getByRole('menuitemradio', { name: 'High', exact: true }).click()
+    await expect.poll(() => trigger.getAttribute('aria-label')).toBe('选择模型，当前 Acme Think，推理等级 High')
+    const caption = await trigger.getAttribute('aria-label')
+    await trigger.click()
+    const speedCell = page.getByRole('menuitem', { name: /^速度/ })
+    await expect.poll(() => speedCell.locator('span').allTextContents()).toEqual(['速度', 'Default'])
+    await speedCell.click()
+
+    // The provider default plus exactly the declared tiers, nothing invented.
+    const tiers = page.getByRole('menuitemradio')
+    await expect.poll(async () => tiers.allTextContents(), { timeout: 10_000 })
+      .toEqual(['Default', 'Standard', 'Fast'])
+    await compareOrRefreshGolden(SPEED_EXPECTED,
+      await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd), MODE)
+
+    const selection = page.waitForRequest(request => new URL(request.url()).pathname.endsWith('/session/selectModel'))
+    await page.getByRole('menuitemradio', { name: 'Fast', exact: true }).click()
+    const envelope = (await selection).postDataJSON() as { payload: { args: { request: Record<string, unknown> } } }
+    // The tier joins the recorded selection; the current effort survives.
+    expect(envelope.payload.args.request).toMatchObject({
+      provider: 'acme-gateway', model: 'acme-think', serviceTier: 'fast', reasoningEffort: 'high',
+    })
+    await expect.poll(() => page.getByRole('menu').count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(
+      async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'),
+      { timeout: 10_000 },
+    ).toContain('serviceTier: fast')
+    // The caption keeps the effort it already showed; speed is not folded into it.
+    await expect.poll(() => trigger.getAttribute('aria-label'), { timeout: 10_000 }).toBe(caption)
+
+    await trigger.click()
+    await expect.poll(() => page.getByRole('menuitem', { name: /^速度/ }).locator('span').allTextContents())
+      .toEqual(['速度', 'Fast'])
+    await page.keyboard.press('Escape')
+    await page.reload({ waitUntil: 'load' })
+    await trigger.waitFor()
+    await trigger.click()
+    await expect.poll(() => page.getByRole('menuitem', { name: /^速度/ }).locator('span').allTextContents())
+      .toEqual(['速度', 'Fast'])
+    await page.keyboard.press('Escape')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -261,6 +313,6 @@ describe.skipIf(MODE === 'record').each([
   })
 
   it('keeps its snapshot inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['ui.expected.md', 'pointer-menu.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['ui.expected.md', 'pointer-menu.expected.md', 'speed.expected.md'])
   })
 })

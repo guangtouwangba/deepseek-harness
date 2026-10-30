@@ -45,6 +45,10 @@ kind: "package-reference"
         apiKeyEnv: OPENAI_API_KEY
         baseURL: https://proxy.example.com:8443
         reasoning: high
+        # key = selectable tier, value = wire service_tier; null sends no field.
+        serviceTiers:
+          standard: default
+          flex:
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
         requestImageMaxBytes: 1048576    # raw bytes before base64 expansion
         maxRequestImageBytes: 20971520   # accumulated base64 payload
@@ -80,6 +84,7 @@ kind: "package-reference"
 | `baseURL` | 目录端点 | 路由上所有模型的端点 |
 | `models` | 已安装目录 | 整体替换路由目录；每个条目从已安装模型取默认值 |
 | `modelOverrides` | 无 | 重塑个别已安装目录模型，而不替换其余模型 |
+| `serviceTiers` | 无 | 按适配器 id 索引的可选 OpenAI 服务层级；值为线上 `service_tier` 拼写，`null` 表示不发送该字段 |
 | `compat` | 目录检测 | 无法识别端点的协议兼容开关 |
 | `defaultContextWindow` | `1,000,000` | 未描述模型的容量回退 |
 | `defaultMaxTokens` | `128,000` | 未描述模型的输出上限回退 |
@@ -106,6 +111,8 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 确切模型元数据将 `reasoning.efforts` 按可选强度从低到高排列。配置函数可从该列表中选择，再由 `prepareCall()` 校验具体强度。适配器只接收解析后的控制项。选择 `off` 不保证禁用推理：以省略推理字段表达该值的协议会沿用网关默认行为。所选等级下产生的推理 token 都计入该请求的输出上限。
 
+`serviceTiers` 声明一条路由提供的 OpenAI 服务层级：每个键都是配置函数通过 `GenerateOptions.serviceTier` 选择的适配器 id，其值是分派时发送的精确 `service_tier` token，因此网关可以使用自己的词汇。值为 `null` 表示该选择完全不发送 `service_tier` 字段，用于在显式层级之外表示提供方默认。该字段是路由级的，因为一个网关对其模型发布同一套层级词汇。确切模型元数据按配置顺序列出 `serviceTiers.tiers`，适配器把所选层级的线上值放到请求体上。只有 OpenAI Chat Completions、Responses 与 Codex Responses 协议可以携带 `service_tier`；在模型使用其他协议的路由上配置层级会让模型解析以 `INVALID_CONFIG` 失败，而不是静默丢弃该字段。选择路由未提供的层级会以 `UNSUPPORTED_SERVICE_TIER` 失败。本适配器不配置默认层级，因此省略选择时不会发送任何内容。
+
 对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
 
 ### 运行时更改配置
@@ -118,7 +125,7 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 ### 失败与恢复
 
-pi-ai 不提供的路由需要 `api`、`baseURL` 与非空 `models` 列表；无法服务的 profile 会在写入处被拒绝，并点名路由与模型。失败携带稳定 code：无法使用的凭据以 `INVALID_CREDENTIAL` 失败并点名路由与引用，`apiKeyEnv` 引用解析为空的路由以 `MISSING_CREDENTIAL` 失败，未配置模型以 `UNKNOWN_MODEL` 失败，终止性提供方失败则区分 `QUOTA` 与暂时性 `RATE_LIMIT`。`GenerateOptions.stop` 以 `UNSUPPORTED_OPTION` 被拒绝，因为 pi-ai 的通用流式 UI 无法跨提供方保证它。
+pi-ai 不提供的路由需要 `api`、`baseURL` 与非空 `models` 列表；无法服务的 profile 会在写入处被拒绝，并点名路由与模型。失败携带稳定 code：无法使用的凭据以 `INVALID_CREDENTIAL` 失败并点名路由与引用，`apiKeyEnv` 引用解析为空的路由以 `MISSING_CREDENTIAL` 失败，未配置模型以 `UNKNOWN_MODEL` 失败，选择路由未提供的服务层级以 `UNSUPPORTED_SERVICE_TIER` 失败，终止性提供方失败则区分 `QUOTA` 与暂时性 `RATE_LIMIT`。`GenerateOptions.stop` 以 `UNSUPPORTED_OPTION` 被拒绝，因为 pi-ai 的通用流式 UI 无法跨提供方保证它。
 
 Config 更新严格验证发生变化的 provider。初始加载将已存储的目录故障保留为可编辑的 provider 诊断；未更改的故障 provider 不阻止其他编辑。可用模型仍可选择，无法解析的模型在网络 I/O 前失败。修复或删除问题配置会清除其诊断。
 
@@ -221,6 +228,20 @@ git add packages/llm/llm-pi-ai/src/provider-data.generated.ts
 
 传给适配器的后续系统消息不会进入初始提示词，从而保留此前的请求前缀。这不改变 Agent loop 的提示词纳入行为；它仍在不支持原生系统更新的路由上合并更新。转换保持逻辑请求顺序，图片句柄与卸载占位符则会添加模型可见文本。即使附件身份与请求字节保持稳定，执行世界路径变化也会改写历史句柄，并可能从该图片起阻止复用。更换适配器实例、提供方、模型或其他上游 token 具有相同的后缀影响。一次省略决策会把较早图片换成占位文本，因此复用在该消息处结束；省略永不回退，此后前缀保持稳定。
 
+### 服务层级选择
+
+#### 模型看到什么
+
+所选层级改变提供方侧的调度优先级或价格，而不改变请求内容：模型收到的系统提示词、历史、工具与采样字段完全相同。只有当所选层级拥有非 null 的线上值时才在出站请求体携带 `service_tier`；null 层级与未选择层级产生相同的请求体。
+
+#### Token 影响
+
+该选择不增加输入或输出 token。
+
+#### KV Cache 影响
+
+该字段不改变提示词前缀或其缓存标识，因此只更改所选层级时，本来相同的请求仍可复用缓存。
+
 ### 提供方响应
 
 #### 模型看到什么
@@ -259,6 +280,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **图片只在 user 与工具结果消息中被接受**——system、developer 或 assistant 历史中的图片在两条转换路径上都会以 `UNSUPPORTED_CONTENT` 失败。
 - **提供方 HTTP 状态不可用**——pi-ai 错误事件不跨提供方暴露稳定 HTTP 状态。
 - **重试策略由提供方自有，而非 SDK 重试**——pi-ai SDK 重试保持禁用，因此持久 agent（智能体）步骤与 `llm/retry` 事件拥有每个可见尝试，直接 `ctx.llm.stream()` 调用仍是单次尝试。
+- **`serviceTiers` 是路由级且仅限 OpenAI 协议**——配置路由上的每个模型都提供同一份字典；模型协议无法携带 `service_tier` 时该路由的模型元数据会以 `INVALID_CONFIG` 失败；适配器无法验证网关是否遵从所请求的层级。
 - **流式 JSON 工具调用参数避免逐 delta 重复解析**——安装的 pi-ai 带有 [`patches/@earendil-works__pi-ai@1.3.0.patch`](../../../patches/@earendil-works__pi-ai@1.3.0.patch)，它移除了每个流适配器中对整段累计参数 JSON 的逐 delta 重新解析（上游 [earendil-works/pi#9265](https://github.com/earendil-works/pi/issues/9265)）；未打补丁时，数 MB 的参数流会在事件循环上消耗 O(n²) CPU，并使进程内所有会话停滞。完成事件提供解析后的参数；Responses 可能在参数完成和输出项完成时分别解析。本适配器只读取 delta 字符串与最终参数。每次升级 pi-ai 时都要重新应用或撤销该补丁。
 - **Chat Completions 中的 Gemini 工具调用思考签名由补丁保留**——同一补丁把 OpenAI 兼容流式响应里的 `tool_calls[].extra_content.google.thought_signature` 读入工具调用的重放签名，并在同一模型继续时以 `extra_content` 发回（上游 [earendil-works/pi#10157](https://github.com/earendil-works/pi/issues/10157)）；未打补丁时，Gemini 会以 HTTP 400 拒绝工具调用轮次的下一步。OpenRouter 的加密推理详情仍通过 `reasoning_details` 重放。
 

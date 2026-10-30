@@ -108,6 +108,21 @@
     },
     {
       "doc": "docs/subsystems/llm-streaming.md",
+      "symbol": "ServiceTierId",
+      "source": "packages/llm/llm/src/brand.ts"
+    },
+    {
+      "doc": "docs/subsystems/llm-streaming.md",
+      "symbol": "LlmServiceTierInfo",
+      "source": "packages/llm/llm/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/llm-streaming.md",
+      "symbol": "LlmModelServiceTiersInfo",
+      "source": "packages/llm/llm/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/llm-streaming.md",
       "symbol": "LlmResolvedModelInfo",
       "source": "packages/llm/llm/src/types.ts"
     },

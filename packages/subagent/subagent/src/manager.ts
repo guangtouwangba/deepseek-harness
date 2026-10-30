@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ServiceTierId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
@@ -391,6 +391,7 @@ export class SubagentManager {
     const agentProvider = agentOptions.provider
     const agentModel = agentOptions.model
     const agentReasoningEffort = agentOptions.reasoningEffort
+    const agentServiceTier = agentOptions.serviceTier
     const descriptor = snapshotSubagentDescriptor({
       mode: 'continuable',
       provider: spec.provider,
@@ -398,6 +399,7 @@ export class SubagentManager {
       ...agentProvider !== undefined ? { agentProvider } : {},
       ...agentModel !== undefined ? { agentModel } : {},
       ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
+      ...agentServiceTier !== undefined ? { agentServiceTier } : {},
     })
     // Capture before the first await: a later parent switch belongs to the
     // parent's future, not to this child.
@@ -1390,6 +1392,9 @@ export class SubagentManager {
           ...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
           ...descriptor.agentReasoningEffort !== undefined
             ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) }
+            : {},
+          ...descriptor.agentServiceTier !== undefined
+            ? { serviceTier: ServiceTierId(descriptor.agentServiceTier) }
             : {},
         },
         composition: { agentPreset: agentPreset ?? undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter },

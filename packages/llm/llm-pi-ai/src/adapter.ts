@@ -48,11 +48,14 @@ import type {
   GenerateOptions,
   ImageAttachmentAccess,
   LlmModelInfo,
+  LlmModelServiceTiersInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
+  LlmServiceTierInfo,
   PreparedAdapterCall,
   ReasoningEffortId as ReasoningEffortIdType,
   ResolvedRetryPolicy,
+  ServiceTierId as ServiceTierIdType,
   StreamChunk,
   ToolSchema,
 } from '@deepseek-ai/dsh-llm'
@@ -72,6 +75,19 @@ const ANTHROPIC_TOOL_UPDATE_PLACEHOLDER: ToolSchema = {
   description: 'Reserved placeholder that keeps deferred tool loading active; never call this tool.',
   parameters: { type: 'object', properties: {} },
 }
+
+/**
+ * pi-ai protocols whose request builders carry a caller-supplied
+ * `service_tier`: the Chat Completions, Responses, and Codex Responses
+ * variants this adapter dispatches through. A route that configures tiers for
+ * a model speaking another protocol is refused rather than sending a field
+ * that protocol never reads.
+ */
+const SERVICE_TIER_APIS: ReadonlySet<string> = new Set([
+  'openai-responses',
+  'openai-completions',
+  'openai-codex-responses',
+])
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
 interface PiAiSnapshot {
@@ -178,6 +194,63 @@ function resolveReasoningLevel(
     `pi-ai provider "${model.provider}" model "${model.id}" does not support reasoning effort "${effort}"`,
     'UNSUPPORTED_REASONING_EFFORT',
   )
+}
+
+/**
+ * Reject a model whose protocol cannot carry `service_tier`, naming the route,
+ * model, and protocol rather than sending a field the protocol never reads.
+ * @param model - the resolved model descriptor.
+ */
+function assertCarriesServiceTier(model: Model<Api>): void {
+  if (!SERVICE_TIER_APIS.has(model.api)) {
+    throw new LlmError(
+      `pi-ai provider "${model.provider}" model "${model.id}" configures service tiers but its protocol`
+      + ` "${model.api}" cannot carry service_tier`,
+      'INVALID_CONFIG',
+    )
+  }
+}
+
+/**
+ * Service-tier metadata for one model, or the configuration failure when its
+ * protocol cannot carry the field.
+ * @param model - the resolved model descriptor.
+ * @param tiers - the route's resolved tiers.
+ * @returns the seam's service-tier offer for this model.
+ */
+function serviceTierInfo(
+  model: Model<Api>,
+  tiers: readonly { info: LlmServiceTierInfo; wire: string | null }[],
+): LlmModelServiceTiersInfo {
+  assertCarriesServiceTier(model)
+  return { tiers: tiers.map(tier => tier.info) }
+}
+
+/**
+ * The wire value for one selected tier: a string to send, `null` when the
+ * route sends no field for that tier, or `undefined` when none was selected.
+ * @param model - the resolved model descriptor, for diagnostics.
+ * @param tiers - the route's resolved tiers, if any.
+ * @param selected - the tier the caller selected, if any.
+ * @returns the selected tier's wire value, or undefined when no tier was selected.
+ */
+function selectedServiceTierWire(
+  model: Model<Api>,
+  tiers: readonly { info: LlmServiceTierInfo; wire: string | null }[] | undefined,
+  selected: ServiceTierIdType | undefined,
+): string | null | undefined {
+  if (selected === undefined) return undefined
+  const tier = tiers?.find(candidate => candidate.info.id === selected)
+  if (tier === undefined) {
+    throw new LlmError(
+      `pi-ai provider "${model.provider}" model "${model.id}" does not support service tier "${selected}"`,
+      'UNSUPPORTED_SERVICE_TIER',
+    )
+  }
+  // The LLM service refuses this during model metadata resolution; a direct
+  // stream call still must not put the field on a protocol that cannot read it.
+  assertCarriesServiceTier(model)
+  return tier.wire
 }
 
 /**
@@ -329,6 +402,9 @@ export class PiAiAdapter extends LlmAdapter {
     // Only a cap the deployment configured is a request default; the
     // catalog's `maxTokens` sizes the model and stops there.
     const configuredMaxTokens = profile.configuredMaxTokens.get(model)
+    const serviceTiers = profile.serviceTiers === undefined
+      ? undefined
+      : serviceTierInfo(resolvedModel, profile.serviceTiers)
     return {
       provider,
       id: model,
@@ -337,6 +413,7 @@ export class PiAiAdapter extends LlmAdapter {
       context: { contextWindow: resolvedModel.contextWindow },
       ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
       ...reasoningInfo(resolvedModel, defaultLevel),
+      ...serviceTiers === undefined ? {} : { serviceTiers },
       ...conversationUpdates(resolvedModel),
     }
   }
@@ -381,6 +458,7 @@ export class PiAiAdapter extends LlmAdapter {
       model,
       options.reasoningEffort ?? profile.reasoning,
     )
+    const serviceTier = selectedServiceTierWire(model, profile.serviceTiers, options.serviceTier)
     const apiKey = await this.config.resolveApiKey(options.provider, profile)
 
     const consumer = new AbortController()
@@ -422,6 +500,12 @@ export class PiAiAdapter extends LlmAdapter {
         // Profile headers are deployment-owned; attribution names are
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
+        // pi-ai's simple options have no service-tier field, so set it on the
+        // built payload while keeping every other field; a null wire value
+        // leaves the field absent entirely.
+        ...serviceTier === undefined || serviceTier === null ? {} : {
+          onPayload: (payload: unknown) => Object.assign({}, payload, { service_tier: serviceTier }),
+        },
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
       let exhausted = false

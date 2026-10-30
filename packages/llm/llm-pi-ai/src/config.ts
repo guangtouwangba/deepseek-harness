@@ -19,8 +19,8 @@ import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
-import type { ResolvedRetryPolicy, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
+import { resolveRetryPolicy, RetryPolicySchema, ServiceTierId } from '@deepseek-ai/dsh-llm'
+import type { LlmServiceTierInfo, ResolvedRetryPolicy, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import {
   CACHE_CONTROL_FORMATS,
@@ -152,6 +152,15 @@ export interface PiAiProviderProfile {
   headers?: Record<string, string>
   /** Provider-neutral pi-ai reasoning level. */
   reasoning?: ModelThinkingLevel
+  /**
+   * Selectable service tiers for every model on this route. Each key is the
+   * adapter id a caller passes as `GenerateOptions.serviceTier`, and its value
+   * is the wire `service_tier` spelling; `null` sends no field. Deployment-
+   * varying, so there is no default: omit the field when the route offers no
+   * choice. Only the Chat Completions, Responses, and Codex Responses
+   * protocols can carry `service_tier`.
+   */
+  serviceTiers?: Readonly<Record<string, string | null>> | undefined
   /** Token budgets used by reasoning providers that support them. */
   thinkingBudgets?: ThinkingBudgets
   /** Prompt-cache retention preference. */
@@ -184,7 +193,7 @@ export interface PiAiProviderProfile {
 
 /** Validated profile with its route stamped and every adapter-owned default resolved. */
 export interface ResolvedPiAiProviderProfile
-  extends Omit<PiAiProviderProfile, 'apiKeyEnv' | 'retryPolicy' | 'models' | 'displayName'> {
+  extends Omit<PiAiProviderProfile, 'apiKeyEnv' | 'retryPolicy' | 'models' | 'displayName' | 'serviceTiers'> {
   /** Harness route key and the `Models` collection key (the configuration dict key). */
   provider: string
   /** Resolved display name for selectors and configuration surfaces. */
@@ -201,6 +210,8 @@ export interface ResolvedPiAiProviderProfile
   requestImageMaxBytes: number
   /** Immutable retry policy captured with this provider route. */
   retryPolicy: ResolvedRetryPolicy
+  /** Selectable service tiers resolved for this route, in configuration order; omitted when unconfigured. */
+  serviceTiers?: readonly { info: LlmServiceTierInfo; wire: string | null }[]
   /**
    * The pi-ai provider containing this route's serviceable models. Absent when
    * a stored route cannot be constructed; its configuration remains editable.
@@ -299,6 +310,55 @@ const reasoningEfforts = z.dict(
   z.union(THINKING_LEVELS),
 ) as unknown as z<PiAiReasoningEfforts>
 
+/**
+ * Route-level selectable service tiers. The union keeps an absent field absent:
+ * schemastery materializes a bare dict as `{}`, which must stay distinguishable
+ * from a configured empty dict that resolution refuses.
+ */
+const serviceTiers = z.union([
+  z.const(undefined),
+  z.dict(z.union([z.string().min(1), z.const(null)])),
+])
+
+/** The capitalized adapter id used as a tier's human name, like a reasoning level. */
+function serviceTierName(id: string): string {
+  return `${id.charAt(0).toUpperCase()}${id.slice(1)}`
+}
+
+/**
+ * Resolve a route's selectable service tiers. A `null` tier value sends no
+ * field; an omitted dict declares no choices. A configured dict must contain
+ * at least one tier with a wire value.
+ * @param provider - provider route key, for diagnostics.
+ * @param configured - the profile's service-tier dict, when it has one.
+ * @returns resolved tiers in configuration order, or undefined when unconfigured.
+ */
+function resolveServiceTiers(
+  provider: string,
+  configured: Readonly<Record<string, string | null>> | undefined,
+): readonly { info: LlmServiceTierInfo; wire: string | null }[] | undefined {
+  if (!configured) return undefined
+  const entries = Object.entries(configured)
+  if (entries.length === 0) {
+    throw new Error(`llm-pi-ai: provider "${provider}" serviceTiers must name at least one selectable tier;`
+      + ' omit the field when the route serves no choice')
+  }
+  if (entries.every(([, wire]) => wire === null)) {
+    throw new Error(`llm-pi-ai: provider "${provider}" serviceTiers names no tier with a wire service_tier value;`
+      + ' name at least one, or omit the field')
+  }
+  return entries.map(([id, wire]) => {
+    if (id.length === 0) {
+      throw new Error(`llm-pi-ai: provider "${provider}" serviceTiers keys must be non-empty adapter ids`)
+    }
+    if (wire !== null && wire.length === 0) {
+      throw new Error(`llm-pi-ai: provider "${provider}" serviceTiers.${id} must not be an empty string;`
+        + ' use null to send no field')
+    }
+    return { info: { id: ServiceTierId(id), name: serviceTierName(id) }, wire }
+  })
+}
+
 /** The fields a `models` entry and a `modelOverrides` value share; only the id's home differs. */
 const modelFields = {
   name: z.string(),
@@ -336,6 +396,7 @@ const profile = z.object({
   defaultInput: z.array(z.union(MODALITIES)).default([...DEFAULT_INPUT]),
   headers: z.dict(z.string()),
   reasoning: z.union(THINKING_LEVELS),
+  serviceTiers,
   thinkingBudgets,
   cacheRetention: z.union(['none', 'short', 'long']),
   transport: z.union(['sse', 'websocket', 'websocket-cached', 'auto']),
@@ -455,6 +516,7 @@ export function resolveProfiles(
     if (defaultInput.length === 0) {
       throw new Error(`llm-pi-ai: provider "${provider}" defaultInput must name at least one modality`)
     }
+    const serviceTiers = resolveServiceTiers(provider, source.serviceTiers)
     // The route key, not the installed provider's own name: the directory has
     // always shown route keys, and a catalog route must not silently rename
     // itself on every configuration surface just because it gained a profile.
@@ -487,12 +549,13 @@ export function resolveProfiles(
       if (validation === 'strict' || !(error instanceof PiAiCatalogError)) throw error
       catalogError ??= error.message
     }
-    const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, ...rest } = source
+    const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, serviceTiers: _serviceTiers, ...rest } = source
     resolved.set(provider, {
       ...rest,
       provider,
       displayName,
       ...apiKeyEnv === undefined ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },
+      ...serviceTiers === undefined ? {} : { serviceTiers },
       streamIdleTimeoutMs,
       maxRequestImageBytes,
       requestImagePixelBudget,

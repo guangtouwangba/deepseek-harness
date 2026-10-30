@@ -4,7 +4,7 @@ import AgentRegistry, { type ModelSelection } from '@deepseek-ai/dsh-agent'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { ReasoningEffortId, type LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ServiceTierId, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import { AcpModelControl } from '../src/model-control.ts'
 
 /** Minimal LLM catalog/runtime double for pure standard-option tests. */
@@ -12,12 +12,18 @@ function llmRuntime(overrides: Partial<LlmRuntime> = {}): LlmRuntime {
   return {
     listProviders: () => [{ id: 'mock', name: 'Mock' }],
     listModels: () => Promise.resolve([{ provider: 'mock', id: 'mock', name: 'Mock' }]),
-    resolveCallConfig: (selection: { provider?: string; model?: string; reasoningEffort?: string }) => Promise.resolve({
+    resolveCallConfig: (selection: {
+      provider?: string
+      model?: string
+      reasoningEffort?: string
+      serviceTier?: string
+    }) => Promise.resolve({
       provider: selection.provider ?? 'mock',
       model: selection.model ?? 'mock',
       ...selection.reasoningEffort === undefined
         ? { reasoningEffort: ReasoningEffortId('high') }
         : { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) },
+      ...selection.serviceTier === undefined ? {} : { serviceTier: ServiceTierId(selection.serviceTier) },
     }),
     resolveModelInfo: (provider: string, model: string) => Promise.resolve({
       provider,
@@ -32,7 +38,7 @@ function llmRuntime(overrides: Partial<LlmRuntime> = {}): LlmRuntime {
       },
     }),
     ...overrides,
-  } as unknown as LlmRuntime
+  } as LlmRuntime
 }
 
 async function createControl(runtime: LlmRuntime, initial?: ModelSelection) {
@@ -144,5 +150,47 @@ describe('ACP model configuration control', () => {
 
     expect(restored.find(option => option.id === 'reasoning_effort')).toMatchObject({ currentValue: '' })
     expect(model.current()).toEqual({ provider: 'mock', model: 'mock' })
+  })
+
+  it('preserves the recorded service tier when the reasoning effort changes on the same route', async () => {
+    const { control, model } = await createControl(llmRuntime(), {
+      provider: 'mock',
+      model: 'mock',
+      reasoningEffort: ReasoningEffortId('high'),
+      serviceTier: ServiceTierId('flex'),
+    })
+
+    await control.set('reasoning_effort', 'low')
+
+    expect(model.current()).toEqual({
+      provider: 'mock',
+      model: 'mock',
+      reasoningEffort: 'low',
+      serviceTier: 'flex',
+    })
+  })
+
+  it('drops the previous service tier when the model changes instead of resolving a new one', async () => {
+    const runtime = llmRuntime({
+      listModels: () => Promise.resolve([
+        { provider: 'mock', id: 'mock', name: 'Mock' },
+        { provider: 'mock', id: 'other', name: 'Other' },
+      ]),
+      resolveCallConfig: (selection: { provider?: string; model?: string; reasoningEffort?: string }) => Promise.resolve({
+        provider: selection.provider ?? 'mock',
+        model: selection.model ?? 'mock',
+        ...selection.model !== 'other' ? {} : { serviceTier: ServiceTierId('standard') },
+      }),
+    })
+    const { control, model } = await createControl(runtime, {
+      provider: 'mock',
+      model: 'mock',
+      reasoningEffort: ReasoningEffortId('high'),
+      serviceTier: ServiceTierId('flex'),
+    })
+
+    await control.set('model', JSON.stringify(['mock', 'other']))
+
+    expect(model.current()).toEqual({ provider: 'mock', model: 'other' })
   })
 })

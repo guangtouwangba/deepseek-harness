@@ -5,7 +5,7 @@ import { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 
-import { HarnessError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { HarnessError, ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm'
 import { carrierKeyOf } from '@deepseek-ai/dsh-scope'
 import SubagentRuntime, {
   foldSubagentDescriptor,
@@ -477,6 +477,7 @@ describe('subagent descriptors', () => {
       agentProvider: 'deepseek',
       agentModel: 'chat',
       agentReasoningEffort: ReasoningEffortId('high'),
+      agentServiceTier: ServiceTierId('flex'),
       persona: 'reviewer',
       toolFilter: { allow: ['read'], deny: ['bash'] },
     }
@@ -487,6 +488,7 @@ describe('subagent descriptors', () => {
       agentProvider: complete.agentProvider,
       agentModel: complete.agentModel,
       agentReasoningEffort: complete.agentReasoningEffort,
+      agentServiceTier: complete.agentServiceTier,
       persona: complete.persona,
       toolFilter: complete.toolFilter,
     })).toEqual(complete)
@@ -585,6 +587,13 @@ describe('subagent descriptors', () => {
       label: 'l',
       agentReasoningEffort: 7,
     }, 'agentReasoningEffort must be a string'],
+    ['invalid agent service tier', {
+      version: SUBAGENT_DESCRIPTOR_VERSION,
+      mode: 'continuable',
+      provider: 'spawn',
+      label: 'l',
+      agentServiceTier: 7,
+    }, 'agentServiceTier must be a string'],
     ['invalid persona', {
       version: SUBAGENT_DESCRIPTOR_VERSION,
       mode: 'continuable',

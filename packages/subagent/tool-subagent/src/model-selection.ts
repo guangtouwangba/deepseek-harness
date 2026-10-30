@@ -89,7 +89,8 @@ function assertNonEmpty(value: string | undefined, field: keyof DelegationModelR
 /**
  * Merge model-supplied selection fields over configured child defaults.
  * Provider and model form one route and must be supplied together. Changing
- * that route without an effort clears the configured route-owned effort.
+ * that route drops the configured route-owned effort and service tier, so the
+ * new model resolves its own defaults.
  * @param parentOptions - Current parent values that supply missing child values.
  * @param configured - Tool-instance child defaults.
  * @param request - Model-facing route override.
@@ -117,9 +118,13 @@ export function requestedAgentOptions(
   const baselineModel = configured?.model ?? parentOptions.model
   const routeChanged = request.provider !== undefined
     && (request.provider !== baselineProvider || request.model !== baselineModel)
-  const { reasoningEffort: _configuredReasoningEffort, ...configuredWithoutReasoning } = configured ?? {}
+  const {
+    reasoningEffort: _configuredReasoningEffort,
+    serviceTier: _configuredServiceTier,
+    ...configuredWithoutRouteValues
+  } = configured ?? {}
   return {
-    ...routeChanged && request.reasoning_effort === undefined ? configuredWithoutReasoning : configured,
+    ...routeChanged ? configuredWithoutRouteValues : configured,
     ...request.provider === undefined ? {} : { provider: request.provider, model: request.model },
     ...request.reasoning_effort === undefined
       ? {}
@@ -161,30 +166,33 @@ export function assertAllowedModelSelection(
 /**
  * Whether configured Agent options require route validation before delegation.
  * @param options - Tool-instance child defaults.
- * @returns Whether configured provider, model, or effort values must be resolved.
+ * @returns Whether configured provider, model, effort, or service tier values must be resolved.
  */
 export function hasConfiguredLlmSelection(options: AgentOptions | undefined): boolean {
   return options?.provider !== undefined
     || options?.model !== undefined
     || options?.reasoningEffort !== undefined
+    || options?.serviceTier !== undefined
 }
 
 /**
  * Resolve an effective child route through its live adapter before the child is
  * created. The LLM runtime owns provider lookup, exact-model metadata, effort
- * validation, and adapter defaults.
+ * and service-tier validation, and adapter defaults. An unchanged route may
+ * inherit the parent's effort and tier; a changed route validates only values
+ * the child layer names.
  * @param llm - Live LLM runtime.
  * @param parentOptions - Current parent values whose compatible fields the child inherits.
  * @param requested - Per-child options after request/config merging.
  * @param signal - Tool-call cancellation signal.
- * @param inheritParentReasoningEffort - Whether an omitted effort may inherit from the parent route.
+ * @param inheritParentRouteValues - Whether omitted effort and tier may inherit from the parent route.
  */
 export async function preflightChildLlmRoute(
   llm: LlmRuntime,
   parentOptions: AgentOptions,
   requested: AgentOptions | undefined,
   signal: AbortSignal,
-  inheritParentReasoningEffort = true,
+  inheritParentRouteValues = true,
 ): Promise<void> {
   const provider = requested?.provider ?? parentOptions.provider
   const model = requested?.model ?? parentOptions.model
@@ -193,10 +201,13 @@ export async function preflightChildLlmRoute(
   }
   const routeChanged = provider !== parentOptions.provider || model !== parentOptions.model
   const reasoningEffort = requested?.reasoningEffort
-    ?? (inheritParentReasoningEffort && !routeChanged ? parentOptions.reasoningEffort : undefined)
+    ?? (inheritParentRouteValues && !routeChanged ? parentOptions.reasoningEffort : undefined)
+  const serviceTier = requested?.serviceTier
+    ?? (inheritParentRouteValues && !routeChanged ? parentOptions.serviceTier : undefined)
   await llm.resolveCallConfig({
     provider,
     model,
     ...reasoningEffort === undefined ? {} : { reasoningEffort },
+    ...serviceTier === undefined ? {} : { serviceTier },
   }, signal)
 }

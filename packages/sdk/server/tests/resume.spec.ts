@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ReasoningEffortId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ServiceTierId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
 import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { JsonRpcTransportPeer, SessionEventNotification } from '@deepseek-ai/dsh-sdk-protocol'
@@ -76,6 +76,29 @@ describe('SDK persisted session resume', () => {
     expect(second.ctx.agents.get(SessionId('saved-effort'))!.model.current()).toEqual({
       provider: 'mock', model,
       ...expected === undefined ? {} : { reasoningEffort: expected },
+    })
+  })
+
+  it.each([
+    { model: 'mock', expected: 'flex' },
+    { model: 'other', expected: undefined },
+  ])('preserves a saved service tier only on the same initialized route: $model', async ({ model, expected }) => {
+    const root = await storageRoot()
+    const first = await initialized(root)
+    await first.server.prompt({ sessionId: 'saved-tier', contentBlocks: [{ type: 'text', text: 'remember' }] })
+    await first.server.wait({ sessionId: 'saved-tier' })
+    first.ctx.agents.get(SessionId('saved-tier'))!.model.select({
+      provider: 'mock', model: 'mock', serviceTier: ServiceTierId('flex'),
+    })
+    await first.server.shutdown()
+    await first.ctx.fiber.dispose()
+
+    const second = await runtime(root)
+    await second.server.initialize({ cwd: root, provider: 'mock', model })
+    await second.server.resume({ sessionId: 'saved-tier' })
+    expect(second.ctx.agents.get(SessionId('saved-tier'))!.model.current()).toEqual({
+      provider: 'mock', model,
+      ...expected === undefined ? {} : { serviceTier: expected },
     })
   })
 

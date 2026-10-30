@@ -59,9 +59,9 @@ export function resolveChildDepth(parent: Agent, maxDepth: number | undefined): 
 
 /**
  * Resolve the parent values inherited by a child. The latest request header
- * owns provider, model, and reasoning effort after request-time selection;
- * creation options remain the fallback before the first request and retain
- * the configured output-token limit.
+ * owns provider, model, reasoning effort, and service tier after request-time
+ * selection; creation options remain the fallback before the first request and
+ * retain the configured output-token limit.
  * @param parent - delegating parent Agent.
  * @returns detached Agent options for child-option merging.
  */
@@ -72,6 +72,7 @@ export function parentAgentOptionsForDelegation(parent: Agent): AgentOptions {
     provider: _createdProvider,
     model: _createdModel,
     reasoningEffort: _createdReasoningEffort,
+    serviceTier: _createdServiceTier,
     ...createdOptions
   } = parent.options
   return {
@@ -81,15 +82,16 @@ export function parentAgentOptionsForDelegation(parent: Agent): AgentOptions {
     ...requestConfig.reasoningEffort === undefined
       ? {}
       : { reasoningEffort: requestConfig.reasoningEffort },
+    ...requestConfig.serviceTier === undefined ? {} : { serviceTier: requestConfig.serviceTier },
   }
 }
 
 /**
  * Resolve the child's `AgentOptions`: the parent's provider/model,
- * reasoning-effort, and maxTokens values unless the request overrides them,
- * stamped with the child's own delegation depth. Changing the route without
- * naming an effort clears the parent's route-owned effort so the selected
- * model resolves its own default.
+ * reasoning-effort, service-tier, and maxTokens values unless the request
+ * overrides them, stamped with the child's own delegation depth. Changing the
+ * route without naming an effort or tier clears the parent's route-owned values
+ * so the selected model resolves its own defaults.
  * @param parent - the delegating parent whose route the child inherits.
  * @param requested - per-child overrides, if any.
  * @param childDepth - the resolved delegation depth to stamp.
@@ -104,17 +106,20 @@ export function resolveChildAgentOptions(
   const parentProvider = parentOptions.provider
   const parentModel = parentOptions.model
   const parentReasoningEffort = parentOptions.reasoningEffort
+  const parentServiceTier = parentOptions.serviceTier
   const parentMaxTokens = parentOptions.maxTokens
   const resolved: AgentOptions = {
     ...parentProvider !== undefined ? { provider: parentProvider } : {},
     ...parentModel !== undefined ? { model: parentModel } : {},
     ...parentReasoningEffort !== undefined ? { reasoningEffort: parentReasoningEffort } : {},
+    ...parentServiceTier !== undefined ? { serviceTier: parentServiceTier } : {},
     ...parentMaxTokens !== undefined ? { maxTokens: parentMaxTokens } : {},
     ...requested,
     subagentDepth: childDepth,
   }
   const routeChanged = resolved.provider !== parentProvider || resolved.model !== parentModel
   if (routeChanged && requested?.reasoningEffort === undefined) delete resolved.reasoningEffort
+  if (routeChanged && requested?.serviceTier === undefined) delete resolved.serviceTier
   return resolved
 }
 

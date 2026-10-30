@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ServiceTierId } from '@deepseek-ai/dsh-llm'
 import { assertServiceable, Config, resolveProfiles, type Options } from '../src/config.ts'
 
 /** Validate one hand-declared route, with the caller's fields layered onto it. */
@@ -54,6 +55,62 @@ describe('reasoning schema boundary', () => {
         supportsThinkingTokenBudget: true,
       },
     })).not.toThrow()
+  })
+})
+
+describe('service tier schema boundary', () => {
+  it('rejects an empty dict and one that can send nothing', () => {
+    // The schema accepts both as well-typed; resolution is what refuses a
+    // route that would offer no selectable tier or only empty wire values.
+    expect(routeWith({ serviceTiers: {} })).not.toThrow()
+    expect(() => { assertServiceable(routeWith({ serviceTiers: {} })() as Options) })
+      .toThrow(/"acme-gateway" serviceTiers must name at least one selectable tier/)
+    expect(() => { assertServiceable(routeWith({ serviceTiers: { standard: null } })() as Options) })
+      .toThrow(/"acme-gateway" serviceTiers names no tier with a wire service_tier value/)
+  })
+
+  it('rejects empty adapter ids and empty wire spellings', () => {
+    expect(routeWith({ serviceTiers: { standard: '' } })).toThrow()
+    expect(() => { assertServiceable(routeWith({ serviceTiers: { '': 'default' } })() as Options) })
+      .toThrow(/"acme-gateway" serviceTiers keys must be non-empty adapter ids/)
+    // Programmatic callers bypass the schema's minimum length.
+    expect(() => {
+      assertServiceable({
+        providers: {
+          'acme-gateway': {
+            api: 'openai-completions',
+            baseURL: 'https://acme.test',
+            models: [{ id: 'm' }],
+            serviceTiers: { standard: '' },
+          },
+        },
+      })
+    }).toThrow(/"acme-gateway" serviceTiers.standard must not be an empty string/)
+  })
+
+  it('resolves selectable tiers with capitalized names and wire values', () => {
+    const resolved = resolveProfiles({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        models: [{ id: 'm' }],
+        serviceTiers: { standard: 'default', flex: null },
+      },
+    })
+    expect(resolved.get('acme-gateway')?.serviceTiers).toEqual([
+      { info: { id: ServiceTierId('standard'), name: 'Standard' }, wire: 'default' },
+      { info: { id: ServiceTierId('flex'), name: 'Flex' }, wire: null },
+    ])
+    const unconfigured = resolveProfiles({
+      'acme-gateway': { api: 'openai-completions', baseURL: 'https://acme.test', models: [{ id: 'm' }] },
+    })
+    expect(unconfigured.get('acme-gateway')?.serviceTiers).toBeUndefined()
+  })
+
+  it('treats a valueless key as no service-tier configuration', () => {
+    const valueless = routeWith({ serviceTiers: null })() as Options
+    expect(valueless.providers?.['acme-gateway']?.serviceTiers).toBeNull()
+    expect(() => { assertServiceable(valueless) }).not.toThrow()
   })
 })
 

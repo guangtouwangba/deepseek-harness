@@ -615,6 +615,31 @@ interface LlmModelReasoningInfo {
 ```
 
 ```ts type-equiv
+/** Adapter-owned identifier for one model's selectable service tier. */
+type ServiceTierId = Branded<'ServiceTierId'>
+```
+
+```ts type-equiv
+/** Display metadata for one adapter-owned service tier. */
+interface LlmServiceTierInfo {
+  /** Opaque stable value accepted by {@link GenerateOptions.serviceTier}. */
+  id: ServiceTierId
+  /** Human-readable tier name for selectors and diagnostics. */
+  name: string
+  /** Optional user-facing distinction from otherwise similar tiers. */
+  description?: string
+}
+```
+
+```ts type-equiv
+/** Selectable service tiers for one exact provider/model route. */
+interface LlmModelServiceTiersInfo {
+  /** Supported tiers in display order. */
+  tiers: readonly LlmServiceTierInfo[]
+}
+```
+
+```ts type-equiv
 /** Exact-route model metadata resolved by its owning adapter. */
 interface LlmResolvedModelInfo extends LlmModelInfo {
   /** Provider-owned context capacity when known. */
@@ -623,6 +648,8 @@ interface LlmResolvedModelInfo extends LlmModelInfo {
   defaultMaxTokens?: number
   /** Adapter-owned selectable reasoning levels when exposed. */
   reasoning?: LlmModelReasoningInfo
+  /** Adapter-owned selectable service tiers when exposed; absence means the route serves none. */
+  serviceTiers?: LlmModelServiceTiersInfo
   /** Declared mid-conversation system prompt handling; absent means only a leading system message is read. */
   systemPromptUpdate?: SystemPromptUpdate
   /** Declared mid-conversation tool declaration handling; absent means every request declares the complete tool list. */
@@ -655,6 +682,8 @@ interface GenerateOptions {
   model: string
   /** Adapter-owned reasoning effort selected for this exact model. */
   reasoningEffort?: ReasoningEffortId
+  /** Adapter-owned service tier selected for this exact model; absence defers to the provider's default tier. */
+  serviceTier?: ServiceTierId
   /**
    * Ordered conversation messages, exactly as the provider sees them. A
    * loop-built request passes the derived history (dsh-agent-loop), whose
@@ -801,6 +830,7 @@ FIXME(call-config-shape)：重新审视其余哪些字段出于缓存目的确�
 /** Concrete generation settings; omitted controls use the selected route's defaults. */
 interface LlmCallControls {
   reasoningEffort?: ReasoningEffortId
+  serviceTier?: ServiceTierId
   temperature?: number
   maxTokens?: number
   stop?: string[]

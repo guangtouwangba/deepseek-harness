@@ -45,6 +45,10 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
         apiKeyEnv: OPENAI_API_KEY
         baseURL: https://proxy.example.com:8443
         reasoning: high
+        # key = selectable tier, value = wire service_tier; null sends no field.
+        serviceTiers:
+          standard: default
+          flex:
         requestImagePixelBudget: 4194304 # total pixels; 2048 by 2048 default
         requestImageMaxBytes: 1048576    # raw bytes before base64 expansion
         maxRequestImageBytes: 20971520   # accumulated base64 payload
@@ -80,6 +84,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
 | `baseURL` | catalog endpoint | Endpoint of every model on the route |
 | `models` | installed catalog | Replaces the route's catalog wholesale; each entry defaults from the installed model |
 | `modelOverrides` | none | Reshapes individual installed-catalog models without replacing the rest |
+| `serviceTiers` | absent | Selectable OpenAI service tiers by adapter id; each value is the wire `service_tier` spelling, `null` sends no field |
 | `compat` | catalog detection | Wire-compatibility switches for unrecognized endpoints |
 | `defaultContextWindow` | `1,000,000` | Capacity fallback for undescribed models |
 | `defaultMaxTokens` | `128,000` | Output-cap fallback for undescribed models |
@@ -106,6 +111,8 @@ A profile's `models` list replaces the route's installed catalog rather than ext
 
 Exact-model metadata lists `reasoning.efforts` from least to greatest selectable effort. A configuration function can select from that list before `prepareCall()` validates the concrete effort. The adapter receives only the resolved controls. Selecting `off` does not guarantee disabled reasoning: a protocol that expresses it by omitting the reasoning field leaves the gateway's default in effect. Reasoning tokens at any selected level count toward the request's output cap.
 
+`serviceTiers` declares the OpenAI service tiers a route offers: each key is the adapter id a configuration function selects as `GenerateOptions.serviceTier`, and its value is the exact `service_tier` token dispatch sends, so a gateway can use its own vocabulary. A `null` value means the selection sends no `service_tier` field at all, which models the provider default beside an explicit tier. The field is route-level because a gateway publishes one tier vocabulary across its models. Exact-model metadata lists `serviceTiers.tiers` in configuration order, and the adapter sends the selected tier's wire value on the request body. Only the OpenAI Chat Completions, Responses, and Codex Responses protocols can carry `service_tier`; configuring tiers on a route whose model speaks another protocol fails model resolution with `INVALID_CONFIG` instead of silently dropping the field. A selected tier the route does not offer fails with `UNSUPPORTED_SERVICE_TIER`. This adapter configures no default tier, so omitting the selection sends nothing.
+
 For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects the reasoning-budget parameter, and `vllmPriority` sets an integer scheduler priority when the server enables priority scheduling. Template arguments accept `$var: thinking.budget`. `openai-responses` gateways can set `supportsMaxOutputTokens: false` to omit `max_output_tokens`; Azure and Codex transports ignore this shared compatibility field. These controls are opt-in; catalog-owned Anthropic effort and fallback capabilities are not configurable switches.
 
 ### Change configuration at runtime
@@ -118,7 +125,7 @@ The plugin answers "which models can this provider serve?" for a route a configu
 
 ### Failures and recovery
 
-A route pi-ai does not ship needs `api`, `baseURL`, and a non-empty `models` list; an unserviceable profile is refused where it is written, naming the route and model. Failures carry stable codes: a credential that cannot be used fails with `INVALID_CREDENTIAL` naming the route and reference, a route whose `apiKeyEnv` reference resolves to nothing fails with `MISSING_CREDENTIAL`, an unconfigured model fails with `UNKNOWN_MODEL`, and terminal provider failures distinguish `QUOTA` from transient `RATE_LIMIT`. `GenerateOptions.stop` is rejected with `UNSUPPORTED_OPTION` because pi-ai's common streaming UI cannot guarantee it across providers.
+A route pi-ai does not ship needs `api`, `baseURL`, and a non-empty `models` list; an unserviceable profile is refused where it is written, naming the route and model. Failures carry stable codes: a credential that cannot be used fails with `INVALID_CREDENTIAL` naming the route and reference, a route whose `apiKeyEnv` reference resolves to nothing fails with `MISSING_CREDENTIAL`, an unconfigured model fails with `UNKNOWN_MODEL`, a selected service tier the route does not offer fails with `UNSUPPORTED_SERVICE_TIER`, and terminal provider failures distinguish `QUOTA` from transient `RATE_LIMIT`. `GenerateOptions.stop` is rejected with `UNSUPPORTED_OPTION` because pi-ai's common streaming UI cannot guarantee it across providers.
 
 Config updates strictly validate changed providers. Initial loading retains stored catalog failures as editable provider diagnostics; unchanged failed providers do not block edits elsewhere. Serviceable models remain selectable, and unresolved models fail before network I/O. Repairing or deleting the offending configuration clears its diagnostic.
 
@@ -221,6 +228,20 @@ Provider tokenization governs exact input. Retained images add the stable attach
 
 Later system messages supplied to the adapter stay out of the initial prompt, preserving the preceding request prefix. This does not change the agent loop’s prompt admission, which consolidates updates on routes without native system-update support. Conversion preserves logical request order, while image handles and offload placeholders add model-visible text. A changed execution-world path rewrites a historical handle and can prevent reuse from that image even when attachment identity and request bytes stay stable. Changing adapter instance, provider, model, or another upstream token has the same suffix effect. An offload decision turns an earlier image into placeholder text, so reuse ends at that message; the omission never reverts, so the prefix stays stable afterwards.
 
+### Service tier selection
+
+#### What the model sees
+
+The selected tier changes provider-side processing priority or price, not the request content: the model receives the same system prompt, history, tools, and sampling fields. The outgoing body carries `service_tier` only when the selected tier has a non-null wire value; a null tier and no selected tier produce the same body.
+
+#### Token effect
+
+The selection adds no input or output tokens.
+
+#### KV Cache effect
+
+The field does not change the prompt prefix or its cache identity, so changing only the selected tier keeps an otherwise identical request reusable.
+
 ### Provider response
 
 #### What the model sees
@@ -259,6 +280,7 @@ These limits define where the adapter stops and future work begins. They are cur
 - **Images are accepted only in user and tool-result messages** — images in system, developer, or assistant history fail with `UNSUPPORTED_CONTENT` on both conversion paths.
 - **Provider HTTP status is unavailable** — pi-ai error events do not expose a stable HTTP status across providers.
 - **Retry policy is provider-owned, not an SDK retry** — pi-ai SDK retries stay disabled so durable agent steps and `llm/retry` events own every visible attempt, and direct `ctx.llm.stream()` calls remain single-attempt.
+- **`serviceTiers` is route-level and restricted to OpenAI protocols** — every model on a configured route offers the same dict, a model whose protocol cannot carry `service_tier` makes that route's model metadata fail with `INVALID_CONFIG`, and the adapter cannot verify that a gateway honors the requested tier.
 - **Streamed JSON tool-call arguments avoid per-delta reparsing** — the installed pi-ai carries [`patches/@earendil-works__pi-ai@1.3.0.patch`](../../../patches/@earendil-works__pi-ai@1.3.0.patch), which removes the per-delta re-parse of the whole accumulated argument JSON in every stream adapter (upstream [earendil-works/pi#9265](https://github.com/earendil-works/pi/issues/9265)); unpatched, a multi-megabyte argument stream costs O(n²) CPU on the event loop and stalls every session in the process. Completion events supply parsed arguments; Responses may parse at both argument completion and output-item completion. This adapter reads only delta strings and finalized arguments. Re-apply or retire the patch on every pi-ai upgrade.
 - **Gemini tool-call thought signatures are patched into Chat Completions** — the same patch reads `tool_calls[].extra_content.google.thought_signature` from a streamed OpenAI-compatible response into the tool call's replay signature and sends it back as `extra_content` when the same model resumes (upstream [earendil-works/pi#10157](https://github.com/earendil-works/pi/issues/10157)); unpatched, Gemini rejects the next step of a tool-calling turn with HTTP 400. Encrypted OpenRouter reasoning details keep their `reasoning_details` replay.
 

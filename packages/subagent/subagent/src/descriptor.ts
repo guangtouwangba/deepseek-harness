@@ -7,9 +7,8 @@
  *
  * The descriptor deliberately snapshots explicit fields rather than the
  * merge-extensible `AgentOptions` object: an unrelated extension value cannot
- * make continuation fail merely because it is not JSON, and later composition
- * inputs require a deliberate {@link SUBAGENT_DESCRIPTOR_VERSION} change. It
- * omits `subagentDepth` — cold resume trusts the persisted header's
+ * make continuation fail merely because it is not JSON.
+ * It omits `subagentDepth` — cold resume trusts the persisted header's
  * `delegationDepth` as the monotone floor — and `outputSchema`, which belongs
  * to one activation's result contract rather than durable child composition.
  * Per-activation knobs such as `maxTokens` are omitted for the same reason as
@@ -23,7 +22,7 @@
 
 import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm'
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools'
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -42,8 +41,9 @@ declare module '@deepseek-ai/dsh-session/types' {
 /**
  * The current descriptor format version, stamped into every appended
  * `subagent/descriptor` event and required verbatim by {@link foldSubagentDescriptor}.
- * Supporting another composition input is a deliberate version change, never
- * an implicit extra field.
+ * Optional additions retain this version when their absence preserves the
+ * historical composition. Readers reject unknown fields before cold resume;
+ * required additions or changes to existing field meanings need a new version.
  */
 export const SUBAGENT_DESCRIPTOR_VERSION = 3
 
@@ -79,6 +79,8 @@ export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBas
   readonly agentModel?: string
   /** Resolved child `agentOptions.reasoningEffort`, when one was declared. */
   readonly agentReasoningEffort?: ReasoningEffortId
+  /** Resolved child `agentOptions.serviceTier`, when one was declared. */
+  readonly agentServiceTier?: ServiceTierId
   /** Per-child persona that shadows the deployment persona on resume. */
   readonly persona?: string
   /** Child tool scoping reapplied on resume. */
@@ -105,6 +107,7 @@ const CONTINUABLE_DESCRIPTOR_KEYS = new Set([
   'agentProvider',
   'agentModel',
   'agentReasoningEffort',
+  'agentServiceTier',
   'persona',
   'toolFilter',
 ])
@@ -204,6 +207,7 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
   const agentProvider = optionalString(value, 'agentProvider')
   const agentModel = optionalString(value, 'agentModel')
   const agentReasoningEffort = optionalString(value, 'agentReasoningEffort') as ReasoningEffortId | undefined
+  const agentServiceTier = optionalString(value, 'agentServiceTier') as ServiceTierId | undefined
   const persona = optionalString(value, 'persona')
   const toolFilter = Object.hasOwn(value, 'toolFilter')
     ? parseToolFilter(value['toolFilter'])
@@ -216,6 +220,7 @@ function parseSubagentDescriptor(value: unknown): SubagentDescriptorData | undef
     ...agentProvider !== undefined ? { agentProvider } : {},
     ...agentModel !== undefined ? { agentModel } : {},
     ...agentReasoningEffort !== undefined ? { agentReasoningEffort } : {},
+    ...agentServiceTier !== undefined ? { agentServiceTier } : {},
     ...persona !== undefined ? { persona } : {},
     ...toolFilter !== undefined ? { toolFilter } : {},
   }
@@ -238,6 +243,7 @@ export function snapshotSubagentDescriptor(
     ...input.agentProvider !== undefined ? { agentProvider: input.agentProvider } : {},
     ...input.agentModel !== undefined ? { agentModel: input.agentModel } : {},
     ...input.agentReasoningEffort !== undefined ? { agentReasoningEffort: input.agentReasoningEffort } : {},
+    ...input.agentServiceTier !== undefined ? { agentServiceTier: input.agentServiceTier } : {},
     ...input.persona !== undefined ? { persona: input.persona } : {},
     ...input.toolFilter !== undefined ? { toolFilter: input.toolFilter } : {},
   }

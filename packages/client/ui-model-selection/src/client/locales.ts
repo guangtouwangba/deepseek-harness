@@ -24,7 +24,9 @@ export const zh = {
   'menu.aria': '模型与推理等级',
   'menu.model': '模型',
   'menu.effort': '推理等级',
+  'menu.speed': '速度',
   'effort.providerDefault': 'Default',
+  'tier.providerDefault': 'Default',
   'status.loading': '正在刷新模型列表…',
   'error.action': '模型操作失败：{message}',
   'error.sessionInUse': '当前会话已被占用，可能是其他正在运行的 DSH 导致的（如其他 dsh web、桌面端），请退出其他正在运行的 DSH 后重试。',
@@ -35,6 +37,7 @@ export const zh = {
   'search.empty': '没有匹配的模型。',
   'empty.models': '暂无可用模型',
   'empty.efforts': '当前模型未提供推理等级。',
+  'empty.serviceTiers': '当前模型未提供速度档位。',
 } satisfies Record<string, string>
 
 /** The model namespace key union. */
@@ -56,7 +59,9 @@ export const en = {
   'menu.aria': 'Model and reasoning effort',
   'menu.model': 'Model',
   'menu.effort': 'Effort',
+  'menu.speed': 'Speed',
   'effort.providerDefault': 'Default',
+  'tier.providerDefault': 'Default',
   'status.loading': 'Refreshing model list…',
   'error.action': 'Model operation failed: {message}',
   'error.sessionInUse': 'This session is already in use, possibly by another running DSH instance (such as dsh web or the desktop app). Quit other running DSH instances and try again.',
@@ -67,6 +72,7 @@ export const en = {
   'search.empty': 'No matching models.',
   'empty.models': 'No models available.',
   'empty.efforts': 'This model provides no reasoning effort levels.',
+  'empty.serviceTiers': 'This model provides no speed tiers.',
 } satisfies Record<ModelKey, string>
 
 /** Japanese copy, checked against the English keys. */
@@ -85,7 +91,9 @@ export const ja = {
   'menu.aria': 'モデルと推論強度',
   'menu.model': 'モデル',
   'menu.effort': '強度',
+  'menu.speed': '速度',
   'effort.providerDefault': 'デフォルト',
+  'tier.providerDefault': 'デフォルト',
   'status.loading': 'モデル一覧を更新中…',
   'error.action': 'モデル操作に失敗しました: {message}',
   'error.sessionInUse': 'このセッションは既に使用中です。別の DSH インスタンス（dsh web やデスクトップアプリなど）が実行中の可能性があります。他の DSH インスタンスを終了してから再試行してください。',
@@ -96,6 +104,7 @@ export const ja = {
   'search.empty': '一致するモデルがありません。',
   'empty.models': '利用可能なモデルがありません。',
   'empty.efforts': 'このモデルには推論強度の設定がありません。',
+  'empty.serviceTiers': 'このモデルには速度ティアの設定がありません。',
 } satisfies Record<keyof typeof en, string>
 
 /** Spanish dictionary, checked against the English keys. */
@@ -114,7 +123,9 @@ export const es = {
   'menu.aria': 'Esfuerzo de modelo y razonamiento.',
   'menu.model': 'modelo',
   'menu.effort': 'Esfuerzo',
+  'menu.speed': 'Velocidad',
   'effort.providerDefault': 'Predeterminado',
+  'tier.providerDefault': 'Predeterminado',
   'status.loading': 'Lista de modelos refrescante...',
   'error.action': 'Error en la operación del modelo: {message}',
   'error.sessionInUse': 'Esta sesión ya está en uso, posiblemente por otra instancia de DSH en ejecución (como la web dsh o la aplicación de escritorio). Salga de otras instancias de DSH en ejecución y vuelva a intentarlo.',
@@ -125,6 +136,7 @@ export const es = {
   'search.empty': 'No hay modelos coincidentes.',
   'empty.models': 'No hay modelos disponibles.',
   'empty.efforts': 'Este modelo no proporciona niveles de esfuerzo de razonamiento.',
+  'empty.serviceTiers': 'Este modelo no proporciona niveles de velocidad.',
 } satisfies Record<keyof typeof en, string>
 
 /** French dictionary, checked against the English keys. */
@@ -143,7 +155,9 @@ export const fr = {
   'menu.aria': 'Effort de modélisation et de raisonnement',
   'menu.model': 'Modèle',
   'menu.effort': 'Effort',
+  'menu.speed': 'Vitesse',
   'effort.providerDefault': 'Par défaut',
+  'tier.providerDefault': 'Par défaut',
   'status.loading': 'Liste des modèles actualisée…',
   'error.action': "Échec de l'opération du modèle : {message}",
   'error.sessionInUse': "Cette session est déjà utilisée, éventuellement par une autre instance DSH en cours d'exécution (telle que le Web dsh ou l'application de bureau). Quittez les autres instances DSH en cours d'exécution et réessayez.",
@@ -154,6 +168,7 @@ export const fr = {
   'search.empty': 'Aucun modèle correspondant.',
   'empty.models': 'Aucun modèle disponible.',
   'empty.efforts': 'Ce modèle ne fournit aucun niveau d’effort de raisonnement.',
+  'empty.serviceTiers': 'Ce modèle ne fournit aucun niveau de vitesse.',
 } satisfies Record<keyof typeof en, string>
 
 /** German dictionary, checked against the English keys. */
@@ -172,7 +187,9 @@ export const de = {
   'menu.aria': 'Modell- und Argumentationsaufwand',
   'menu.model': 'Modell',
   'menu.effort': 'Aufwand',
+  'menu.speed': 'Geschwindigkeit',
   'effort.providerDefault': 'Standard',
+  'tier.providerDefault': 'Standard',
   'status.loading': 'Erfrischende Modellliste…',
   'error.action': 'Modellvorgang fehlgeschlagen: {message}',
   'error.sessionInUse': 'Diese Sitzung wird bereits verwendet, möglicherweise von einer anderen laufenden DSH-Instanz (z. B. dsh Web oder der Desktop-App). Beenden Sie andere laufende DSH-Instanzen und versuchen Sie es erneut.',
@@ -183,6 +200,7 @@ export const de = {
   'search.empty': 'Keine passenden Modelle.',
   'empty.models': 'Keine Modelle verfügbar.',
   'empty.efforts': 'Dieses Modell liefert keine Argumentationsaufwandsstufen.',
+  'empty.serviceTiers': 'Dieses Modell liefert keine Geschwindigkeitsstufen.',
 } satisfies Record<keyof typeof en, string>
 
 /** Russian dictionary, checked against the English keys. */
@@ -201,7 +219,9 @@ export const ru = {
   'menu.aria': 'Модель и рассуждения',
   'menu.model': 'Модель',
   'menu.effort': 'Усилие',
+  'menu.speed': 'Скорость',
   'effort.providerDefault': 'По умолчанию',
+  'tier.providerDefault': 'По умолчанию',
   'status.loading': 'Обновление списка моделей…',
   'error.action': 'Не удалось выполнить операцию модели: {message}.',
   'error.sessionInUse': 'Этот сеанс уже используется, возможно, другим работающим экземпляром DSH (например, веб-сайтом dsh или настольным приложением). Закройте другие работающие экземпляры DSH и повторите попытку.',
@@ -212,6 +232,7 @@ export const ru = {
   'search.empty': 'Нет подходящих моделей.',
   'empty.models': 'Нет доступных моделей.',
   'empty.efforts': 'Эта модель не обеспечивает обоснования уровней усилий.',
+  'empty.serviceTiers': 'Эта модель не предоставляет уровни скорости.',
 } satisfies Record<keyof typeof en, string>
 
 /** Portuguese dictionary, checked against the English keys. */
@@ -230,7 +251,9 @@ export const pt = {
   'menu.aria': 'Modelo e esforço de raciocínio',
   'menu.model': 'Modelo',
   'menu.effort': 'Esforço',
+  'menu.speed': 'Velocidade',
   'effort.providerDefault': 'Padrão',
+  'tier.providerDefault': 'Padrão',
   'status.loading': 'Atualizando lista de modelos…',
   'error.action': 'Falha na operação do modelo: {message}',
   'error.sessionInUse': 'Esta sessão já está em uso, possivelmente por outra instância DSH em execução (como dsh web ou aplicativo de desktop). Saia de outras instâncias DSH em execução e tente novamente.',
@@ -241,4 +264,5 @@ export const pt = {
   'search.empty': 'Não há modelos correspondentes.',
   'empty.models': 'Nenhum modelo disponível.',
   'empty.efforts': 'Este modelo não fornece níveis de esforço de raciocínio.',
+  'empty.serviceTiers': 'Este modelo não fornece níveis de velocidade.',
 } satisfies Record<keyof typeof en, string>

@@ -7,7 +7,7 @@ import {
   type AgentOptions,
   type ModelSelection,
 } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, ReasoningEffortId, type UserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ReasoningEffortId, ServiceTierId, type UserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, type EpochHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { AgentModel, modelSelectionProjectionDefinition } from '../src/model-selection.ts'
@@ -125,6 +125,32 @@ describe('Session model selection', () => {
     expect(h.ctx.sessionProjections.snapshot(h.session).values.modelSelection).toEqual({ lastUsed: selected, next: selected })
     h.header({ ...selected, reasoningEffort: ReasoningEffortId('low') })
     expect(h.current()).toEqual({ ...selected, reasoningEffort: 'low' })
+  })
+
+  it('records a service tier beside the effort and reconstructs both from the log', async () => {
+    const h = await harness()
+    const selected = {
+      provider: 'beta',
+      model: 'b1',
+      reasoningEffort: ReasoningEffortId('high'),
+      serviceTier: ServiceTierId('fast'),
+    }
+    h.record(selected)
+    expect(h.session.snapshotEvents()).toMatchObject([{ type: 'model/selection', data: {
+      provider: 'beta', model: 'b1', reasoningEffort: 'high', serviceTier: 'fast',
+    } }])
+    const restored = Session.create(SessionId('restored-tier'), h.session.snapshotEvents())
+    const projection = await h.ctx.sessionProjections.register(modelSelectionProjectionDefinition)
+    const restoredModel = new AgentModel(() => projection.stateOf(restored), restored, {})
+    expect(restoredModel.current()).toEqual(selected)
+
+    // A tier the adapter defaulted is not a user choice and stays unselected.
+    h.header({ ...selected, serviceTier: ServiceTierId('standard') }, { reasoningEffort: true })
+    expect(h.current()).toEqual(selected)
+    // A different recorded tier retires only through its own exact match.
+    h.header({ ...selected, serviceTier: ServiceTierId('standard') })
+    expect(h.state()?.lastUsed).toEqual({ ...selected, serviceTier: 'standard' })
+    expect(h.state()?.pending).toEqual(selected)
   })
 
   it('reuses fold state for duplicate recorded selections and unrelated events', async () => {

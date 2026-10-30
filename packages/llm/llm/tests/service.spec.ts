@@ -11,6 +11,7 @@ import LlmRuntime, {
   LlmError,
   ProviderRequestId,
   ReasoningEffortId,
+  ServiceTierId,
   resolveRetryPolicy,
   StreamChunk,
   createMessage,
@@ -912,6 +913,93 @@ describe('LlmRuntime', () => {
       model: 'plain',
       reasoningEffort: ReasoningEffortId('standard'),
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
+  })
+
+  it.each([
+    [{ tiers: [] }, 'empty tier list'],
+    [{ tiers: [{ id: '', name: 'Empty' }] }, 'empty id'],
+    [{ tiers: [{ id: 'valid', name: '' }] }, 'empty name'],
+    [{ tiers: [{ id: 'valid', name: 'Valid', description: 1 }] }, 'non-string description'],
+    [{ tiers: [{ id: 'same', name: 'One' }, { id: 'same', name: 'Two' }] }, 'duplicate id'],
+  ] as const)('rejects invalid model service tier metadata (%s: %s)', async (metadata, _label) => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const adapter = new class extends ScriptedAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        const info: LlmResolvedModelInfo = { provider, id: model, name: model }
+        Object.assign(info, { serviceTiers: metadata })
+        return Promise.resolve(info)
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+    await expect(ctx.llm.resolveModelInfo('route', 'model'))
+      .rejects.toMatchObject({ code: 'INVALID_MODEL_SERVICE_TIERS' })
+  })
+
+  it('rejects unsupported service tiers without clamping', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const adapter = new class extends ScriptedAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve(model === 'tiered'
+          ? {
+            provider,
+            id: model,
+            name: model,
+            serviceTiers: { tiers: [{ id: ServiceTierId('fast'), name: 'Fast' }] },
+          }
+          : { provider, id: model, name: model })
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    await expect(ctx.llm.resolveCallConfig({
+      provider: 'route',
+      model: 'tiered',
+      serviceTier: ServiceTierId('flex'),
+    })).rejects.toMatchObject({ code: 'UNSUPPORTED_SERVICE_TIER' })
+    await expect(ctx.llm.resolveCallConfig({
+      provider: 'route',
+      model: 'plain',
+      serviceTier: ServiceTierId('fast'),
+    })).rejects.toMatchObject({ code: 'UNSUPPORTED_SERVICE_TIER' })
+    const resolved = await ctx.llm.resolveCallConfig({
+      provider: 'route',
+      model: 'tiered',
+      serviceTier: ServiceTierId('fast'),
+    })
+    expect(resolved.serviceTier).toBe(ServiceTierId('fast'))
+  })
+
+  it('passes a selected service tier to the adapter beside a defaulted reasoning effort', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const adapter = new class extends RecordingAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({
+          provider,
+          id: model,
+          name: model,
+          reasoning: {
+            efforts: [{ id: ReasoningEffortId('standard'), name: 'Standard' }],
+            defaultEffort: ReasoningEffortId('standard'),
+          },
+          serviceTiers: {
+            tiers: [
+              { id: ServiceTierId('standard'), name: 'Standard' },
+              { id: ServiceTierId('fast'), name: 'Fast' },
+            ],
+          },
+        })
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    for await (const _chunk of ctx.llm.stream({
+      provider: 'route', model: 'model', messages: [], serviceTier: ServiceTierId('fast'),
+    })) { /* drain */ }
+    expect(adapter.lastOptions?.reasoningEffort).toBe(ReasoningEffortId('standard'))
+    expect(adapter.lastOptions?.serviceTier).toBe(ServiceTierId('fast'))
   })
 
   it('resolves reasoning defaults at the final adapter boundary after routing middleware', async () => {

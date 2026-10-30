@@ -257,6 +257,86 @@ describe('ModelSelect catalog badges', () => {
   })
 })
 
+describe('ModelSelect service tier', () => {
+  const serviceTiers = {
+    tiers: [
+      { id: 'standard', name: 'Standard' },
+      { id: 'fast', name: 'Fast' },
+    ],
+  }
+  function tieredState(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryState {
+    return state({
+      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high', serviceTier: 'fast' },
+      groups: [{
+        id: 'deepseek-official',
+        name: 'DeepSeek',
+        models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning, serviceTiers }],
+      }],
+      ...overrides,
+    })
+  }
+
+  it('offers the advertised speed tiers and submits the picked one beside the current effort', async () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(tieredState())
+    const select = vi.fn(async (selection: ModelSelection) => {
+      directory.set(tieredState({ current: selection }))
+      return { ok: true as const, value: undefined }
+    })
+    render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={directory}
+      load={vi.fn()} resolveText={resolveText} select={select} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型，当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^速度/ }))
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent)).toEqual(['Default', 'Standard', 'Fast'])
+    expect(screen.getByRole('menuitemradio', { name: 'Fast' }).getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Standard' }))
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({
+        provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'high', serviceTier: 'standard',
+      })
+    })
+  })
+
+  it('keeps the chosen tier when only the reasoning effort changes', async () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(tieredState())
+    const select = vi.fn(async (_selection: ModelSelection) => ({ ok: true as const, value: undefined }))
+    render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={directory}
+      load={vi.fn()} resolveText={resolveText} select={select} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型，当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^推理等级/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Off' }))
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({
+        provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'off', serviceTier: 'fast',
+      })
+    })
+  })
+
+  it.each(['Escape', 'Tab'])('returns keyboard focus to the speed row on %s', async (key) => {
+    const directory = createSnapshotStore<ModelDirectoryState>(tieredState())
+    render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={directory}
+      load={vi.fn()} resolveText={resolveText} select={vi.fn()} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型，当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /^速度/ }))
+    const fast = screen.getByRole('menuitemradio', { name: 'Fast' })
+    await waitFor(() => { expect(document.activeElement).toBe(fast) })
+    fireEvent.keyDown(fast, { key, shiftKey: key === 'Tab' })
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /^速度/ }))
+    })
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' })
+    await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'Fast' })) })
+  })
+
+  it('hides the speed row for a model whose route advertises no tiers', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state())
+    render(<ModelSelect renderSlot={renderLabel} locked={false} available directory={directory}
+      load={vi.fn()} resolveText={resolveText} select={vi.fn()} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型，当前/ }))
+    expect(screen.getByRole('menuitem', { name: /^推理等级/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: /^速度/ })).toBeNull()
+  })
+})
+
 describe('ModelSelect reasoning effort', () => {
   it('renders effort names without descriptions and submits the effort as part of the session selection', async () => {
     const directory = createSnapshotStore<ModelDirectoryState>(state())

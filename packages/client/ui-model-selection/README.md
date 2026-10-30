@@ -29,7 +29,9 @@ The Web GUI lets users switch the provider, model and reasoning effort for an ex
 
 DeepSeek account and API-key routes appear as separate provider groups, each exposing the same configured model catalog.
 
-Choose a provider with the left control, then choose a model with the adjacent control. Switching providers submits its first available model and that model's default effort together; a rejected switch retains the previous provider and model. Choosing the current provider preserves its current model and effort. Empty provider catalogs cannot be selected, and provider switching is disabled while a selection is pending or the composer is locked.
+Choose a provider with the left control, then choose a model with the adjacent control. Switching providers submits its first available model and that model's default effort together; a rejected switch retains the previous provider and model.
+
+The model menu also lists a Speed row when the exact model's route advertises service tiers: its pane offers the provider default plus every advertised tier, and applies the chosen tier to the next request. Changing the reasoning effort keeps the current tier; choosing another model clears it. Choosing the current provider preserves its current model and effort. Empty provider catalogs cannot be selected, and provider switching is disabled while a selection is pending or the composer is locked.
 
 When no model is selected or the saved selection is absent from the catalog, the composer shows “Select model” in regular weight and hides the reasoning effort caption. Clicking it opens the model list directly; Escape and Shift+Tab close it. An empty catalog displays “No models available.”
 
@@ -110,6 +112,7 @@ These limits define the current model surface. They are current package constrai
 
 - **No create-time or addressed-subagent selection** — both entries require an existing ordinary session's Agent; there is no draft-phase model choice to fold into session creation, and subagent continuation deliberately exposes no independent model-selection contract.
 - **Directory names are presentation-only** — selection and persistence use provider/model/effort ids; a provider whose catalog or exact-model metadata lookup fails lists as an unselectable failure row until reload.
+- **Speed follows the route, not the session** — the Speed row appears only when the exact route advertises service tiers, so a model whose adapter reports none has no speed control, and the tier is never remembered across a model change.
 - **No arbitrary effort input** — the composer offers only the exact model's adapter-advertised levels; an adapter without reasoning metadata leaves the Effort row absent.
 - **Badges label the composer seat only** — `/model` popup rows, the trigger's accessible name, and its tooltip keep the plain catalog name.
 

@@ -17,7 +17,7 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentControl from '@deepseek-ai/dsh-tool-subagent-control'
 import type { ContentBlock, GenerateOptions, MessageId, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, createUserMessage, LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createUserMessage, LlmAdapter, ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SubagentRuntime, {
@@ -649,6 +649,40 @@ describe('SubagentRuntime.startActivation', () => {
     await queuePrompt(ctx, parent, started.childId, message('resume selected reasoning'))
     await waitNoActivation(ctx, started.childId)
     expect(childEfforts).toEqual(['max', 'max'])
+  })
+
+  it('persists a selected service tier and reapplies it on cold resume', async () => {
+    const tier = ServiceTierId('flex')
+    const adapter = new MockAdapter([
+      textResponse('first answer'),
+      textResponse('resumed answer'),
+    ], undefined, undefined, {
+      tiers: [{ id: tier, name: 'Flex' }],
+    })
+    const { ctx, parent } = await setupWith(adapter)
+    parkParent(ctx, parent)
+    const childTiers: Array<string | undefined> = []
+    ctx.on('agent/created', ({ agent }) => {
+      if (agent !== parent) childTiers.push(agent.options.serviceTier)
+    })
+
+    const started = await ctx.subagents.startActivation({
+      delivery: 'parent',
+      ...startSpec(parent),
+      request: {
+        prompt: message('selected tier'),
+        parent,
+        agentOptions: { serviceTier: tier },
+      },
+    })
+    await waitNoActivation(ctx, started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(loaded.events.find(event => event.type === 'subagent/descriptor')?.data)
+      .toMatchObject({ agentServiceTier: 'flex' })
+
+    await queuePrompt(ctx, parent, started.childId, message('resume selected tier'))
+    await waitNoActivation(ctx, started.childId)
+    expect(childTiers).toEqual(['flex', 'flex'])
   })
 
   it('rolls the child back completely when the caller signal aborts before acceptance', async () => {

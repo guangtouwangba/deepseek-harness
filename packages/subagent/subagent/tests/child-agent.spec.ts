@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { resolveChildAgentOptions, resolveChildDepth } from '../src/child-agent.ts'
 
@@ -12,6 +12,7 @@ function parentAgent(): Agent {
       provider: 'parent-provider',
       model: 'parent-model',
       reasoningEffort: ReasoningEffortId('high'),
+      serviceTier: ServiceTierId('flex'),
       maxTokens: 512,
     },
     session: Session.create(id),
@@ -19,17 +20,18 @@ function parentAgent(): Agent {
 }
 
 describe('child Agent options', () => {
-  it('inherits the parent effort while the exact route is unchanged', () => {
+  it('inherits the parent effort and service tier while the exact route is unchanged', () => {
     expect(resolveChildAgentOptions(parentAgent(), undefined, 1)).toEqual({
       provider: 'parent-provider',
       model: 'parent-model',
       reasoningEffort: 'high',
+      serviceTier: 'flex',
       maxTokens: 512,
       subagentDepth: 1,
     })
   })
 
-  it('clears an inherited effort when the child route changes', () => {
+  it('clears an inherited effort and service tier when the child route changes', () => {
     expect(resolveChildAgentOptions(parentAgent(), { model: 'child-model' }, 1)).toEqual({
       provider: 'parent-provider',
       model: 'child-model',
@@ -38,7 +40,7 @@ describe('child Agent options', () => {
     })
   })
 
-  it('keeps an explicit child effort when the child route changes', () => {
+  it('keeps an explicit child effort and drops the inherited tier when the child route changes', () => {
     expect(resolveChildAgentOptions(parentAgent(), {
       provider: 'child-provider',
       model: 'child-model',
@@ -52,6 +54,20 @@ describe('child Agent options', () => {
     })
   })
 
+  it('keeps an explicit child service tier on a different route', () => {
+    expect(resolveChildAgentOptions(parentAgent(), {
+      provider: 'child-provider',
+      model: 'child-model',
+      serviceTier: ServiceTierId('standard'),
+    }, 1)).toEqual({
+      provider: 'child-provider',
+      model: 'child-model',
+      serviceTier: 'standard',
+      maxTokens: 512,
+      subagentDepth: 1,
+    })
+  })
+
   it('inherits the latest logged request selection over creation-time values', () => {
     const parent = parentAgent()
     parent.session.append('request/header', {
@@ -60,6 +76,7 @@ describe('child Agent options', () => {
           provider: 'current-provider',
           model: 'current-model',
           reasoningEffort: ReasoningEffortId('low'),
+          serviceTier: ServiceTierId('standard'),
         },
       },
       reason: 'initial',
@@ -69,6 +86,7 @@ describe('child Agent options', () => {
       provider: 'current-provider',
       model: 'current-model',
       reasoningEffort: 'low',
+      serviceTier: 'standard',
       maxTokens: 512,
       subagentDepth: 1,
     })

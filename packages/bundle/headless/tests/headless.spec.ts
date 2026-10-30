@@ -13,7 +13,7 @@ import type {
   ResumeAgentOptions,
 } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
-import { LlmAttemptId, ReasoningEffortId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAttemptId, ReasoningEffortId, ServiceTierId, ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage, type MessageId, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
@@ -895,6 +895,32 @@ describe('headless runner', () => {
     try {
       const session = test.ctx.sessions.create(brandString<SessionId>('session-effort'), { meta: { cwd: process.cwd() } })
       session.append('model/selection', { provider: 'test-provider', model: savedModel, reasoningEffort: ReasoningEffortId('high') })
+      expect(await test.run()).toMatchObject({ code: 0, out: 'resumed answer\n', err: '' })
+    } finally {
+      await test.ctx.fiber.dispose()
+    }
+  })
+
+  it.each(['test-model', 'other-model'])('restores an explicit service tier only for the declared route (%s)', async (savedModel) => {
+    const test = await bench({
+      afterPrompt(session, message, agent) {
+        expect(agent.model.current()).toEqual({
+          provider: 'test-provider', model: 'test-model',
+          ...savedModel === 'test-model' ? { serviceTier: 'flex' } : {},
+        })
+        appendTurn(session, 1, message, 'resumed answer', true)
+      },
+    }, {
+      sessionId: 'session-tier',
+      observe: () => Promise.resolve({
+        header: { cwd: process.cwd(), origin: 'user' },
+        events: [],
+        [Symbol.dispose]() {},
+      }),
+    })
+    try {
+      const session = test.ctx.sessions.create(brandString<SessionId>('session-tier'), { meta: { cwd: process.cwd() } })
+      session.append('model/selection', { provider: 'test-provider', model: savedModel, serviceTier: ServiceTierId('flex') })
       expect(await test.run()).toMatchObject({ code: 0, out: 'resumed answer\n', err: '' })
     } finally {
       await test.ctx.fiber.dispose()

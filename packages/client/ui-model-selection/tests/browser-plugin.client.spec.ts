@@ -17,7 +17,7 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent/types'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import { ReasoningEffortId, ServiceTierId } from '@deepseek-ai/dsh-llm/brand'
 import type { CommandContribution, PopupSelectSpec, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -92,7 +92,13 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
         },
       })
     },
-    selectModel: (payload: { sessionId: SessionId; provider: string; model: string; reasoningEffort?: string }) => {
+    selectModel: (payload: {
+      sessionId: SessionId
+      provider: string
+      model: string
+      reasoningEffort?: string
+      serviceTier?: string
+    }) => {
       calls.select += 1
       if (selectionFailure !== undefined) return Promise.resolve({ ok: false as const, error: selectionFailure })
       selected = {
@@ -101,6 +107,7 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
         ...payload.reasoningEffort === undefined
           ? {}
           : { reasoningEffort: ReasoningEffortId(payload.reasoningEffort) },
+        ...payload.serviceTier === undefined ? {} : { serviceTier: ServiceTierId(payload.serviceTier) },
       }
       projections.get(payload.sessionId)?.set({ lastUsed: null, next: selected })
       return Promise.resolve({ ok: true as const, value: { selected } })
@@ -292,6 +299,22 @@ describe('ui-model-selection dual entry', () => {
     // The POPUP's next options pass reflects it without a seat-side reload.
     const options = await b.popup().options(projection('s1'), new AbortController().signal)
     expect(options.find((o: SelectOption) => o.label === 'DeepSeek-V4-Pro')).toMatchObject({ active: true })
+  })
+
+  it('keeps the tier when the model popup reselects the active route and clears it on a different route', async () => {
+    const b = await bench()
+    const scope = b.mint('tier-popup')
+    try {
+      const face = b.seat().inject!(sid('tier-popup'))
+      await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-pro', serviceTier: 'fast' })
+      const options = await b.popup().options(projection('tier-popup'), new AbortController().signal)
+      const pro = options.find(option => option.label === 'DeepSeek-V4-Pro')!
+      await b.popup().onSelect(pro, projection('tier-popup'))
+      expect(b.hostCurrent()).toMatchObject({ model: 'deepseek-v4-pro', serviceTier: 'fast' })
+      const flash = options.find(option => option.label === 'DeepSeek-V4-Flash')!
+      await b.popup().onSelect(flash, projection('tier-popup'))
+      expect(b.hostCurrent()).not.toHaveProperty('serviceTier')
+    } finally { await scope.fiber.dispose(); await b.ctx.fiber.dispose() }
   })
 
   it('a popup selection lands on the seat store — the reverse direction of the same state', async () => {
@@ -586,5 +609,22 @@ it.each([false, true])('reports accepted switches with blank=%s and no refused s
     b.rejectSelection()
     await face.select({ provider: 'deepseek-official', model: 'deepseek-v4-flash' })
     expect(b.track).not.toHaveBeenCalled()
+  } finally { await scope.fiber.dispose(); await b.ctx.fiber.dispose() }
+})
+
+it('forwards the selected service tier beside the effort it keeps', async () => {
+  const b = await bench('en')
+  const scope = b.mint('tier', false)
+  try {
+    const face = b.seat().inject!(sid('tier'))
+    await face.select({
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-pro',
+      reasoningEffort: ReasoningEffortId('high'),
+      serviceTier: ServiceTierId('fast'),
+    })
+    expect(b.hostCurrent()).toMatchObject({
+      provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high', serviceTier: 'fast',
+    })
   } finally { await scope.fiber.dispose(); await b.ctx.fiber.dispose() }
 })
